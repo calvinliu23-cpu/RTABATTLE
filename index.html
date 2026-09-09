@@ -61,12 +61,12 @@
     border-radius:4px;border:1px solid var(--line);display:block;
   }
 
-  /* ---------- division tabs (優化手機板並排) ---------- */
+  /* ---------- division tabs ---------- */
   .div-tabs{
     display:flex;
     gap:8px;
     margin-bottom:20px;
-    flex-wrap:nowrap; /* 強制不換行 */
+    flex-wrap:nowrap;
     width:100%;
   }
   .div-tab{
@@ -79,7 +79,7 @@
     font-weight:600;
     font-family:'Oswald',sans-serif;
     letter-spacing:.02em;
-    flex:1 1 0; /* 平均分配寬度 */
+    flex:1 1 0;
     min-width:0;
     text-align:center;
   }
@@ -123,11 +123,32 @@
 
   /* ---------- search ---------- */
   .searchbar{margin-bottom:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-  .searchbar input{
-    background:var(--panel);border:1px solid var(--line);color:var(--text);
-    padding:9px 12px;border-radius:3px;font-size:14px;min-width:220px;
+  .search-input-wrap{
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    min-width:220px;
   }
-  .searchbar input:focus{outline:2px solid var(--teal);outline-offset:1px;border-color:var(--teal);}
+  .search-input-wrap input{
+    background:var(--panel);border:1px solid var(--line);color:var(--text);
+    padding:9px 36px 9px 12px;border-radius:3px;font-size:14px;width:100%;
+  }
+  .search-input-wrap input:focus{outline:2px solid var(--teal);outline-offset:1px;border-color:var(--teal);}
+  .search-btn{
+    position:absolute;
+    right:6px;
+    background:transparent;
+    border:none;
+    color:var(--muted);
+    font-size:15px;
+    padding:4px 6px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:3px;
+    transition:color 0.2s;
+  }
+  .search-btn:hover{color:var(--teal);}
   .searchbar .count{color:var(--muted);font-size:13px;}
 
   /* ---------- bracket (tree diagram) ---------- */
@@ -158,8 +179,9 @@
     border:1px solid var(--line);
     border-radius:3px;
     overflow:visible;
+    transition:border-color 0.3s, box-shadow 0.3s;
   }
-  .match.hl{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal);z-index:2;}
+  .match.hl{border-color:var(--teal);box-shadow:0 0 0 2px var(--teal);z-index:2;}
   
   /* 左上角對戰標籤 */
   .match-tag{
@@ -279,7 +301,7 @@
 
   @media (max-width:640px){
     #app{padding:12px 8px 60px;}
-    .div-tab{padding:7px 4px; font-size:13px;} /* 手機上適度縮小間距 */
+    .div-tab{padding:7px 4px; font-size:13px;}
     .div-tab .meta{font-size:10px;}
     .m-side .pname{max-width:90px;}
   }
@@ -326,6 +348,7 @@ const CN_NUM = ['一','二','三','四','五','六','七','八'];
 let allState = null;
 let currentDiv = 'elite';
 let pollTimer = null;
+let currentSearchQuery = '';
 
 /* ---------- 工具函式 ---------- */
 function threshold(format){ return Math.ceil((format+1)/2); }
@@ -378,7 +401,6 @@ function roundLabelsForSize(size){
 }
 function divName(id){ const d=DIVISIONS.find(x=>x.id===id); return d?d.name:id; }
 
-/* 算出場次標籤名稱與時間，例如：32強-A 07/04 14:00 */
 function getMatchTagLabel(size, r, i, matchObj){
   const counts = matchCountsForSize(size);
   const players = counts[r] * 2;
@@ -634,8 +656,12 @@ function renderPublic(app){
   }
   html += '</div>';
 
+  /* 帶有放大鏡按鈕的搜尋列 */
   html += '<div class="searchbar">'+
-            '<input id="searchBox" type="text" placeholder="搜尋選手暱稱…" oninput="filterBracket(this.value)">'+
+            '<div class="search-input-wrap">'+
+              '<input id="searchBox" type="text" placeholder="搜尋選手暱稱…" value="'+escapeHtml(currentSearchQuery)+'" oninput="onSearchInput(this.value)" onkeydown="if(event.key===\'Enter\')performGlobalSearch()">'+
+              '<button class="search-btn" onclick="performGlobalSearch()" title="跨賽區搜尋並定位">🔍</button>'+
+            '</div>'+
             '<span class="count">共 '+realPlayers+' 位選手・'+totalMatches+' 場比賽</span>'+
           '</div>';
 
@@ -667,6 +693,11 @@ function renderPublic(app){
   html += '<div class="footer-note">此頁面每 5 秒自動同步後台最新結果。若比分未即時更新，可手動重新整理頁面。</div>';
 
   app.innerHTML = html;
+
+  /* 渲染後如果有即時關鍵字，高亮當前頁面 */
+  if(currentSearchQuery){
+    filterBracket(currentSearchQuery);
+  }
 }
 
 function playerRowPublic(name, score, isDone, isWinner){
@@ -681,13 +712,19 @@ function playerRowPublic(name, score, isDone, isWinner){
 function matchCardPublic(m, x, y, size, r, i){
   const showScore = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE;
   const tagLabel = getMatchTagLabel(size, r, i, m);
-  let html = '<div class="match" style="left:'+x+'px;top:'+y+'px;width:'+CARD_W+'px;height:'+CARD_H+'px;" data-names="'+escapeHtml((m.p1||'')+' '+(m.p2||'')).toLowerCase()+'">';
+  let html = '<div class="match" id="matchCard_'+m.id+'" style="left:'+x+'px;top:'+y+'px;width:'+CARD_W+'px;height:'+CARD_H+'px;" data-names="'+escapeHtml((m.p1||'')+' '+(m.p2||'')).toLowerCase()+'">';
   html += '<div class="match-tag">'+escapeHtml(tagLabel)+'</div>';
   html += playerRowPublic(m.p1, showScore?m.score1:'', m.done, m.done && m.winner===m.p1);
   html += playerRowPublic(m.p2, showScore?m.score2:'', m.done, m.done && m.winner===m.p2);
   html += '</div>';
   return html;
 }
+
+function onSearchInput(val){
+  currentSearchQuery = val;
+  filterBracket(val);
+}
+
 function filterBracket(q){
   q = q.trim().toLowerCase();
   document.querySelectorAll('.match').forEach(el=>{
@@ -695,6 +732,84 @@ function filterBracket(q){
     if(q && names.includes(q)) el.classList.add('hl');
     else el.classList.remove('hl');
   });
+}
+
+/* 跨賽區智慧搜尋與自動定位滾動 */
+function performGlobalSearch(){
+  const query = currentSearchQuery.trim().toLowerCase();
+  if(!query) return;
+
+  if(!allState || !allState.divisions) return;
+
+  // 1. 優先在當前賽區尋找
+  let targetDivId = currentDiv;
+  let targetMatchId = null;
+
+  const currentDivData = allState.divisions[currentDiv];
+  if(currentDivData && currentDivData.rounds){
+    for(const round of currentDivData.rounds){
+      for(const m of round){
+        const names = ((m.p1||'') + ' ' + (m.p2||'')).toLowerCase();
+        if(names.includes(query)){
+          targetMatchId = m.id;
+          break;
+        }
+      }
+      if(targetMatchId) break;
+    }
+  }
+
+  // 2. 如果當前賽區沒找到，跨其它賽區尋找
+  if(!targetMatchId){
+    for(const d of DIVISIONS){
+      if(d.id === currentDiv) continue;
+      const divData = allState.divisions[d.id];
+      if(divData && divData.rounds){
+        for(const round of divData.rounds){
+          for(const m of round){
+            const names = ((m.p1||'') + ' ' + (m.p2||'')).toLowerCase();
+            if(names.includes(query)){
+              targetDivId = d.id;
+              targetMatchId = m.id;
+              break;
+            }
+          }
+          if(targetMatchId) break;
+        }
+      }
+      if(targetMatchId) break;
+    }
+  }
+
+  // 3. 找到目標賽區與場次 -> 切換賽區並自動平滑滾動定位
+  if(targetMatchId){
+    if(currentDiv !== targetDivId){
+      currentDiv = targetDivId;
+      render();
+    }
+    
+    // 短暫延遲等待 DOM 繪製完成後滾動
+    setTimeout(()=>{
+      filterBracket(query);
+      const targetEl = document.getElementById('matchCard_' + targetMatchId);
+      const scrollContainer = document.querySelector('.bracket-scroll');
+      if(targetEl && scrollContainer){
+        // 1. 將整頁捲動到對戰表區域
+        scrollContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // 2. 將對戰表內部區域精準捲動到該 match 卡片的位置
+        const cardLeft = targetEl.offsetLeft;
+        const cardTop = targetEl.offsetTop;
+        scrollContainer.scrollTo({
+          left: Math.max(0, cardLeft - 100),
+          top: Math.max(0, cardTop - 100),
+          behavior: 'smooth'
+        });
+      }
+    }, 50);
+  } else {
+    alert('找不到名稱包含「' + currentSearchQuery + '」的選手！');
+  }
 }
 
 /* ---------------- 後台 ---------------- */
