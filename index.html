@@ -353,7 +353,7 @@ let allState = null;
 let currentDiv = 'elite';
 let pollTimer = null;
 let currentQuery = '';
-let openRoundBlocks = {}; // 記憶後台開啟的輪次選單 { "elite_0": true, "elite_1": true }
+let openRoundBlocks = {};
 
 /* ---------- 工具函式 ---------- */
 function threshold(format){ return Math.ceil((format+1)/2); }
@@ -592,7 +592,6 @@ async function saveState(){
    ============================================================ */
 function getRoute(){ return location.hash.replace('#','').split('?')[0] === 'admin' ? 'admin' : 'public'; }
 
-/* 記錄目前後台展開的輪次選單 */
 function saveAdminOpenStates(){
   document.querySelectorAll('details.round-block').forEach(el=>{
     const key = el.getAttribute('data-round-key');
@@ -858,7 +857,6 @@ function renderAdmin(app){
       const allDone = doneCount===round.length;
       const blockKey = currentDiv + '_' + r;
       
-      // 判斷該輪次是否開啟：有記錄開關狀態則依據記錄，否則預設開啟進行中的第一輪
       let isOpen = false;
       if(openRoundBlocks.hasOwnProperty(blockKey)){
         isOpen = openRoundBlocks[blockKey];
@@ -873,7 +871,7 @@ function renderAdmin(app){
                 '<span class="rname">'+labels[r]+'</span>'+
                 '<span class="row-inline">'+
                   '<select class="small" onchange="onSetFormat('+r+',this.value)" onclick="event.stopPropagation()">'+
-                    [3,4,5].map(f=>'<option value="'+f+'"'+(round[0]&&round[0].format===f?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+
+                    [3,5].map(f=>'<option value="'+f+'"'+(round[0]&&round[0].format===f?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+
                   '</select>'+
                   '<span class="progress'+(allDone?' done':'')+'">'+doneCount+' / '+round.length+' 完成</span>'+
                 '</span>'+
@@ -1063,7 +1061,7 @@ function setupPanelHtml(divId, div){
           '<select id="sizeSelect">'+sizeOptionsHtml(128)+'</select>'+
         '</div>'+
         '<div class="field" style="margin-bottom:0;"><label>預設賽制</label>'+
-          '<select id="defaultFormat">'+[3,4,5].map(f=>'<option value="'+f+'"'+(f===3?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+'</select>'+
+          '<select id="defaultFormat">'+[3,5].map(f=>'<option value="'+f+'"'+(f===3?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+'</select>'+
         '</div>'+
         '<label class="checkbox-line"><input type="checkbox" id="shuffleCheck" checked> 隨機排籤</label>'+
         '<label class="checkbox-line"><input type="checkbox" id="evenSpreadCheck" checked> 輪空平均分散</label>'+
@@ -1084,7 +1082,7 @@ function setupPanelHtml(divId, div){
           '<select id="sizeSelect">'+sizeOptionsHtml(div.size)+'</select>'+
         '</div>'+
         '<div class="field" style="margin-bottom:0;"><label>預設賽制</label>'+
-          '<select id="defaultFormat">'+[3,4,5].map(f=>'<option value="'+f+'"'+(f===3?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+'</select>'+
+          '<select id="defaultFormat">'+[3,5].map(f=>'<option value="'+f+'"'+(f===3?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+'</select>'+
         '</div>'+
         '<label class="checkbox-line"><input type="checkbox" id="shuffleCheck" checked> 隨機排籤</label>'+
         '<label class="checkbox-line"><input type="checkbox" id="evenSpreadCheck" checked> 輪空平均分散</label>'+
