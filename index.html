@@ -121,32 +121,35 @@
   .empty p{margin:6px 0;}
   .empty code{background:var(--panel-raised);padding:2px 6px;border-radius:3px;color:var(--teal);}
 
-  /* ---------- search ---------- */
+  /* ---------- searchbar with magnifying glass ---------- */
   .searchbar{margin-bottom:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
   .search-input-wrap{
     position:relative;
     display:inline-flex;
     align-items:center;
-    min-width:220px;
   }
   .search-input-wrap input{
-    background:var(--panel);border:1px solid var(--line);color:var(--text);
-    padding:9px 36px 9px 12px;border-radius:3px;font-size:14px;width:100%;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:9px 36px 9px 12px;
+    border-radius:3px;
+    font-size:14px;
+    min-width:240px;
   }
   .search-input-wrap input:focus{outline:2px solid var(--teal);outline-offset:1px;border-color:var(--teal);}
   .search-btn{
     position:absolute;
     right:6px;
-    background:transparent;
+    background:none;
     border:none;
     color:var(--muted);
     font-size:15px;
     padding:4px 6px;
+    border-radius:3px;
     display:flex;
     align-items:center;
     justify-content:center;
-    border-radius:3px;
-    transition:color 0.2s;
   }
   .search-btn:hover{color:var(--teal);}
   .searchbar .count{color:var(--muted);font-size:13px;}
@@ -156,6 +159,7 @@
     max-height:72vh;overflow:auto;
     border:1px solid var(--line);border-radius:4px;
     background:var(--panel);
+    scroll-behavior:smooth;
   }
   .bracket-header{
     position:sticky;top:0;z-index:3;
@@ -348,7 +352,8 @@ const CN_NUM = ['一','二','三','四','五','六','七','八'];
 let allState = null;
 let currentDiv = 'elite';
 let pollTimer = null;
-let currentSearchQuery = '';
+let currentQuery = '';
+let openRoundBlocks = {}; // 記憶後台開啟的輪次選單 { "elite_0": true, "elite_1": true }
 
 /* ---------- 工具函式 ---------- */
 function threshold(format){ return Math.ceil((format+1)/2); }
@@ -401,6 +406,7 @@ function roundLabelsForSize(size){
 }
 function divName(id){ const d=DIVISIONS.find(x=>x.id===id); return d?d.name:id; }
 
+/* 算出場次標籤名稱與時間，例如：32強-A 07/04 14:00 */
 function getMatchTagLabel(size, r, i, matchObj){
   const counts = matchCountsForSize(size);
   const players = counts[r] * 2;
@@ -586,7 +592,20 @@ async function saveState(){
    ============================================================ */
 function getRoute(){ return location.hash.replace('#','').split('?')[0] === 'admin' ? 'admin' : 'public'; }
 
+/* 記錄目前後台展開的輪次選單 */
+function saveAdminOpenStates(){
+  document.querySelectorAll('details.round-block').forEach(el=>{
+    const key = el.getAttribute('data-round-key');
+    if(key){
+      openRoundBlocks[key] = el.open;
+    }
+  });
+}
+
 function render(){
+  if(getRoute()==='admin'){
+    saveAdminOpenStates();
+  }
   const app = document.getElementById('app');
   document.title = siteTitleOrDefault() + (getRoute()==='admin' ? '｜後台管理' : '');
   if(getRoute()==='admin') renderAdmin(app);
@@ -656,11 +675,10 @@ function renderPublic(app){
   }
   html += '</div>';
 
-  /* 帶有放大鏡按鈕的搜尋列 */
   html += '<div class="searchbar">'+
             '<div class="search-input-wrap">'+
-              '<input id="searchBox" type="text" placeholder="搜尋選手暱稱…" value="'+escapeHtml(currentSearchQuery)+'" oninput="onSearchInput(this.value)" onkeydown="if(event.key===\'Enter\')performGlobalSearch()">'+
-              '<button class="search-btn" onclick="performGlobalSearch()" title="跨賽區搜尋並定位">🔍</button>'+
+              '<input id="searchBox" type="text" value="'+escapeHtml(currentQuery)+'" placeholder="搜尋選手暱稱…" onkeydown="if(event.key===\'Enter\')triggerGlobalSearch()">'+
+              '<button class="search-btn" onclick="triggerGlobalSearch()" title="搜尋選手">🔍</button>'+
             '</div>'+
             '<span class="count">共 '+realPlayers+' 位選手・'+totalMatches+' 場比賽</span>'+
           '</div>';
@@ -694,9 +712,8 @@ function renderPublic(app){
 
   app.innerHTML = html;
 
-  /* 渲染後如果有即時關鍵字，高亮當前頁面 */
-  if(currentSearchQuery){
-    filterBracket(currentSearchQuery);
+  if(currentQuery){
+    filterBracket(currentQuery);
   }
 }
 
@@ -712,19 +729,13 @@ function playerRowPublic(name, score, isDone, isWinner){
 function matchCardPublic(m, x, y, size, r, i){
   const showScore = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE;
   const tagLabel = getMatchTagLabel(size, r, i, m);
-  let html = '<div class="match" id="matchCard_'+m.id+'" style="left:'+x+'px;top:'+y+'px;width:'+CARD_W+'px;height:'+CARD_H+'px;" data-names="'+escapeHtml((m.p1||'')+' '+(m.p2||'')).toLowerCase()+'">';
+  let html = '<div class="match" id="match_'+m.id+'" style="left:'+x+'px;top:'+y+'px;width:'+CARD_W+'px;height:'+CARD_H+'px;" data-names="'+escapeHtml((m.p1||'')+' '+(m.p2||'')).toLowerCase()+'">';
   html += '<div class="match-tag">'+escapeHtml(tagLabel)+'</div>';
   html += playerRowPublic(m.p1, showScore?m.score1:'', m.done, m.done && m.winner===m.p1);
   html += playerRowPublic(m.p2, showScore?m.score2:'', m.done, m.done && m.winner===m.p2);
   html += '</div>';
   return html;
 }
-
-function onSearchInput(val){
-  currentSearchQuery = val;
-  filterBracket(val);
-}
-
 function filterBracket(q){
   q = q.trim().toLowerCase();
   document.querySelectorAll('.match').forEach(el=>{
@@ -734,82 +745,75 @@ function filterBracket(q){
   });
 }
 
-/* 跨賽區智慧搜尋與自動定位滾動 */
-function performGlobalSearch(){
-  const query = currentSearchQuery.trim().toLowerCase();
-  if(!query) return;
+function triggerGlobalSearch(){
+  const input = document.getElementById('searchBox');
+  if(!input) return;
+  const q = input.value.trim().toLowerCase();
+  currentQuery = input.value.trim();
+  if(!q){ filterBracket(''); return; }
 
   if(!allState || !allState.divisions) return;
 
-  // 1. 優先在當前賽區尋找
-  let targetDivId = currentDiv;
-  let targetMatchId = null;
+  let foundDivId = null;
 
-  const currentDivData = allState.divisions[currentDiv];
-  if(currentDivData && currentDivData.rounds){
-    for(const round of currentDivData.rounds){
+  const currentDivObj = allState.divisions[currentDiv];
+  if(currentDivObj && currentDivObj.rounds){
+    for(const round of currentDivObj.rounds){
       for(const m of round){
         const names = ((m.p1||'') + ' ' + (m.p2||'')).toLowerCase();
-        if(names.includes(query)){
-          targetMatchId = m.id;
+        if(names.includes(q)){
+          foundDivId = currentDiv;
           break;
         }
       }
-      if(targetMatchId) break;
+      if(foundDivId) break;
     }
   }
 
-  // 2. 如果當前賽區沒找到，跨其它賽區尋找
-  if(!targetMatchId){
+  if(!foundDivId){
     for(const d of DIVISIONS){
-      if(d.id === currentDiv) continue;
-      const divData = allState.divisions[d.id];
-      if(divData && divData.rounds){
-        for(const round of divData.rounds){
-          for(const m of round){
-            const names = ((m.p1||'') + ' ' + (m.p2||'')).toLowerCase();
-            if(names.includes(query)){
-              targetDivId = d.id;
-              targetMatchId = m.id;
-              break;
-            }
+      const divObj = allState.divisions[d.id];
+      if(!divObj || !divObj.rounds) continue;
+      for(const round of divObj.rounds){
+        for(const m of round){
+          const names = ((m.p1||'') + ' ' + (m.p2||'')).toLowerCase();
+          if(names.includes(q)){
+            foundDivId = d.id;
+            break;
           }
-          if(targetMatchId) break;
         }
+        if(foundDivId) break;
       }
-      if(targetMatchId) break;
+      if(foundDivId) break;
     }
   }
 
-  // 3. 找到目標賽區與場次 -> 切換賽區並自動平滑滾動定位
-  if(targetMatchId){
-    if(currentDiv !== targetDivId){
-      currentDiv = targetDivId;
-      render();
-    }
-    
-    // 短暫延遲等待 DOM 繪製完成後滾動
-    setTimeout(()=>{
-      filterBracket(query);
-      const targetEl = document.getElementById('matchCard_' + targetMatchId);
-      const scrollContainer = document.querySelector('.bracket-scroll');
-      if(targetEl && scrollContainer){
-        // 1. 將整頁捲動到對戰表區域
-        scrollContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if(!foundDivId){
+    alert('未在任何賽區找到名稱包含「' + currentQuery + '」的選手');
+    filterBracket('');
+    return;
+  }
 
-        // 2. 將對戰表內部區域精準捲動到該 match 卡片的位置
-        const cardLeft = targetEl.offsetLeft;
-        const cardTop = targetEl.offsetTop;
-        scrollContainer.scrollTo({
-          left: Math.max(0, cardLeft - 100),
-          top: Math.max(0, cardTop - 100),
-          behavior: 'smooth'
-        });
-      }
-    }, 50);
+  if(currentDiv !== foundDivId){
+    currentDiv = foundDivId;
+    render();
   } else {
-    alert('找不到名稱包含「' + currentSearchQuery + '」的選手！');
+    filterBracket(currentQuery);
   }
+
+  setTimeout(()=>{
+    const matches = document.querySelectorAll('.match.hl');
+    if(matches.length > 0){
+      const firstMatch = matches[0];
+      const bracketScroll = document.querySelector('.bracket-scroll');
+      if(bracketScroll){
+        const matchLeft = firstMatch.offsetLeft;
+        const matchTop = firstMatch.offsetTop;
+        bracketScroll.scrollLeft = Math.max(0, matchLeft - 40);
+        bracketScroll.scrollTop = Math.max(0, matchTop - 60);
+      }
+    }
+  }, 100);
 }
 
 /* ---------------- 後台 ---------------- */
@@ -845,13 +849,26 @@ function renderAdmin(app){
     if(div.champion){
       html += '<div class="hero"><div class="champion"><span class="lead">'+divName(currentDiv)+'・賽事結束・冠軍</span>'+escapeHtml(div.champion)+'</div></div>';
     }
+    
     const firstOpenRound = div.rounds.findIndex(r=>r.some(m=>!m.done));
+
     for(let r=0;r<div.totalRounds;r++){
       const round = div.rounds[r];
       const doneCount = round.filter(m=>m.done).length;
       const allDone = doneCount===round.length;
-      const openAttr = (r===firstOpenRound || (firstOpenRound<0 && r===div.totalRounds-1)) ? ' open' : '';
-      html += '<details class="round-block"'+openAttr+'>';
+      const blockKey = currentDiv + '_' + r;
+      
+      // 判斷該輪次是否開啟：有記錄開關狀態則依據記錄，否則預設開啟進行中的第一輪
+      let isOpen = false;
+      if(openRoundBlocks.hasOwnProperty(blockKey)){
+        isOpen = openRoundBlocks[blockKey];
+      } else {
+        isOpen = (r===firstOpenRound || (firstOpenRound<0 && r===div.totalRounds-1));
+      }
+
+      const openAttr = isOpen ? ' open' : '';
+      
+      html += '<details class="round-block" data-round-key="'+blockKey+'"'+openAttr+'>';
       html += '<summary>'+
                 '<span class="rname">'+labels[r]+'</span>'+
                 '<span class="row-inline">'+
@@ -1231,9 +1248,7 @@ async function boot(){
 
     // 5. 還原搜尋狀態
     const newBox = document.getElementById('searchBox');
-    if(newBox && val){
-      newBox.value = val;
-      filterBracket(val);
+    if(newBox){
       if(hadFocus){ newBox.focus(); newBox.setSelectionRange(cursor,cursor); }
     }
   }, 5000);
