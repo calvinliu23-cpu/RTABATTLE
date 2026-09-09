@@ -141,7 +141,7 @@
   }
   .match.hl{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal);z-index:2;}
   
-  /* 小小的對戰組合標籤（如 32強-A） */
+  /* 對戰組合標籤（如 32強-A） */
   .match-tag{
     position:absolute;
     top:-8px;
@@ -359,7 +359,7 @@ function divName(id){ const d=DIVISIONS.find(x=>x.id===id); return d?d.name:id; 
 function getMatchTagLabel(size, r, i){
   const counts = matchCountsForSize(size);
   const players = counts[r] * 2;
-  const letter = String.fromCharCode(65 + i); // 0->A, 1->B, 2->C...
+  const letter = String.fromCharCode(65 + i);
   if(players === 2) return '冠軍賽';
   return players + '強-' + letter;
 }
@@ -1042,13 +1042,34 @@ async function boot(){
   render();
   pollTimer = setInterval(async ()=>{
     if(getRoute()!=='public') return;
+    
+    // 1. 記錄搜尋框焦點與輸入值
     const searchBox = document.getElementById('searchBox');
     const hadFocus = document.activeElement === searchBox;
     const val = searchBox ? searchBox.value : '';
     const cursor = searchBox ? searchBox.selectionStart : 0;
+
+    // 2. 記錄目前頁面與賽程表內部的滾動位置
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
+    const bracketScroll = document.querySelector('.bracket-scroll');
+    const bScrollTop = bracketScroll ? bracketScroll.scrollTop : 0;
+    const bScrollLeft = bracketScroll ? bracketScroll.scrollLeft : 0;
+
+    // 3. 載入最新狀態並重新渲染
     const loaded = await loadState();
     allState = loaded;
     render();
+
+    // 4. 自動還原捲軸位置
+    window.scrollTo(scrollLeft, scrollTop);
+    const newBracketScroll = document.querySelector('.bracket-scroll');
+    if(newBracketScroll){
+      newBracketScroll.scrollTop = bScrollTop;
+      newBracketScroll.scrollLeft = bScrollLeft;
+    }
+
+    // 5. 還原搜尋狀態
     const newBox = document.getElementById('searchBox');
     if(newBox && val){
       newBox.value = val;
