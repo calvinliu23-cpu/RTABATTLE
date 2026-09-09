@@ -671,7 +671,6 @@ function renderPublic(app){
   }
 
   const totalMatches = div.rounds.reduce((a,r)=>a+r.length,0);
-  const doneMatches = div.rounds.reduce((a,r)=>a+r.filter(m=>m.done).length,0);
   const realPlayers = div.rounds[0].reduce((a,m)=>a+[m.p1,m.p2].filter(p=>p&&p!==BYE).length,0);
   const labels = roundLabelsForSize(div.size);
 
@@ -681,7 +680,9 @@ function renderPublic(app){
   } else {
     let liveRound = div.rounds.findIndex(r=>r.some(m=>!m.done));
     if(liveRound<0) liveRound = div.totalRounds-1;
-    html += '<div class="status-line">'+divName(currentDiv)+'目前進行到「'+labels[liveRound]+'」・共 '+totalMatches+' 場，已完成 '+doneMatches+' 場</div>';
+    const isRoundDone = div.rounds[liveRound].every(m=>m.done);
+    const statusText = isRoundDone ? '進行完畢' : '進行中';
+    html += '<div class="status-line">'+divName(currentDiv)+' '+labels[liveRound]+' '+statusText+'</div>';
   }
   html += '</div>';
 
@@ -826,7 +827,6 @@ function triggerGlobalSearch(){
   }, 100);
 }
 
-/* 後台智慧搜尋與定位 */
 function triggerAdminSearch(){
   const input = document.getElementById('adminSearchBox');
   if(!input) return;
@@ -843,7 +843,6 @@ function triggerAdminSearch(){
   let targetMatchId = null;
   let targetRoundIdx = null;
 
-  // 1. 先找當前賽區
   const currentDivObj = allState.divisions[currentDiv];
   if(currentDivObj && currentDivObj.rounds){
     for(let r=0; r<currentDivObj.rounds.length; r++){
@@ -860,7 +859,6 @@ function triggerAdminSearch(){
     }
   }
 
-  // 2. 當前賽區沒有，找其他賽區
   if(!foundDivId){
     for(const d of DIVISIONS){
       const divObj = allState.divisions[d.id];
@@ -886,7 +884,6 @@ function triggerAdminSearch(){
     return;
   }
 
-  // 自動開啟目標輪次的折疊選單
   openRoundBlocks[foundDivId + '_' + targetRoundIdx] = true;
 
   if(currentDiv !== foundDivId){
@@ -896,7 +893,6 @@ function triggerAdminSearch(){
     render();
   }
 
-  // 捲動並高亮該比賽列
   setTimeout(()=>{
     document.querySelectorAll('.m-row').forEach(el=>el.classList.remove('admin-hl'));
     const targetRow = document.getElementById('admin_mrow_' + targetMatchId);
@@ -930,7 +926,6 @@ function renderAdmin(app){
   html += siteTitlePanelHtml();
   html += keyVisualPanelHtml();
 
-  // 後台智慧搜尋框
   html += '<div class="searchbar">'+
             '<div class="search-input-wrap">'+
               '<input id="adminSearchBox" type="text" value="'+escapeHtml(currentQuery)+'" placeholder="後台快速搜尋選手暱稱…" onkeydown="if(event.key===\'Enter\')triggerAdminSearch()">'+
