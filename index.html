@@ -406,12 +406,19 @@ function roundLabelsForSize(size){
 }
 function divName(id){ const d=DIVISIONS.find(x=>x.id===id); return d?d.name:id; }
 
-/* 算出場次標籤名稱與時間，例如：32強-A 07/04 14:00 */
+/* 算出場次編號字母：0->A, 25->Z, 26->A1, 27->B1, 51->Z1, 52->A2 */
+function getMatchLetter(i){
+  const baseLetter = String.fromCharCode(65 + (i % 26));
+  const cycle = Math.floor(i / 26);
+  return cycle === 0 ? baseTag = baseLetter : (baseLetter + cycle);
+}
+
+/* 算出場次標籤名稱與時間，例如：32強-A, 32強-A1 07/04 14:00 */
 function getMatchTagLabel(size, r, i, matchObj){
   const counts = matchCountsForSize(size);
   const players = counts[r] * 2;
-  const letter = String.fromCharCode(65 + i);
-  let baseTag = (players === 2) ? '冠軍賽' : (players + '強-' + letter);
+  const letterStr = getMatchLetter(i);
+  let baseTag = (players === 2) ? '冠軍賽' : (players + '強-' + letterStr);
   if(matchObj && matchObj.timeStr){
     baseTag += ' ' + matchObj.timeStr;
   }
