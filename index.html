@@ -53,11 +53,6 @@
   }
   .topbar h1{font-size:26px;}
   .topbar .sub{color:var(--muted);font-size:13px;margin-top:4px;}
-  .topbar nav a{
-    color:var(--muted);text-decoration:none;font-size:13px;
-    border:1px solid var(--line);padding:6px 12px;border-radius:3px;
-  }
-  .topbar nav a:hover{color:var(--text);border-color:var(--line-strong);}
 
   /* ---------- key visual ---------- */
   .keyvisual-wrap{margin-bottom:18px;}
@@ -141,11 +136,11 @@
   }
   .match.hl{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal);z-index:2;}
   
-  /* 對戰組合標籤（如 32強-A） */
+  /* 改至「左上角」的對戰標籤 */
   .match-tag{
     position:absolute;
-    top:-8px;
-    right:4px;
+    top:-9px;
+    left:4px;
     background:#080c14;
     border:1px solid var(--line-strong);
     color:var(--teal);
@@ -153,10 +148,11 @@
     font-weight:600;
     padding:0px 5px;
     border-radius:2px;
-    line-height:13px;
+    line-height:14px;
     z-index:1;
     pointer-events:none;
-    letter-spacing:0.03em;
+    letter-spacing:0.02em;
+    white-space:nowrap;
   }
 
   .prow{
@@ -252,7 +248,7 @@
   .vs{color:var(--muted);font-size:11px;padding:0 2px;}
   .status-badge{font-size:11px;color:var(--muted);flex:0 0 auto;min-width:56px;}
   .status-badge.done{color:var(--brass);}
-  .m-actions{flex:0 0 auto;margin-left:auto;}
+  .m-actions{flex:0 0 auto;margin-left:auto;display:flex;gap:6px;}
 
   .footer-note{color:var(--muted);font-size:12px;margin-top:24px;line-height:1.7;border-top:1px solid var(--line);padding-top:14px;}
 
@@ -355,13 +351,16 @@ function roundLabelsForSize(size){
 }
 function divName(id){ const d=DIVISIONS.find(x=>x.id===id); return d?d.name:id; }
 
-/* 算出場次標籤名稱，例如：32強-A, 16強-B, 冠軍賽-A */
-function getMatchTagLabel(size, r, i){
+/* 算出場次標籤名稱與時間，例如：32強-A 07/04 14:00 */
+function getMatchTagLabel(size, r, i, matchObj){
   const counts = matchCountsForSize(size);
   const players = counts[r] * 2;
   const letter = String.fromCharCode(65 + i);
-  if(players === 2) return '冠軍賽';
-  return players + '強-' + letter;
+  let baseTag = (players === 2) ? '冠軍賽' : (players + '強-' + letter);
+  if(matchObj && matchObj.timeStr){
+    baseTag += ' ' + matchObj.timeStr;
+  }
+  return baseTag;
 }
 
 /* ---------- 樹狀圖座標計算 ---------- */
@@ -424,7 +423,7 @@ function buildDivision(names, size, format, shuffle, evenSpread){
     for(let i=0;i<count;i++){
       let p1=null, p2=null;
       if(r===0){ p1=list[i*2]; p2=list[i*2+1]; }
-      arr.push({id:'r'+r+'_'+i, p1, p2, score1:0, score2:0, winner:null, format, done:false});
+      arr.push({id:'r'+r+'_'+i, p1, p2, score1:0, score2:0, winner:null, format, done:false, timeStr:''});
     }
     rounds.push(arr);
   }
@@ -499,6 +498,11 @@ function setRoundFormatDiv(div, roundIndex, format){
   if(!div || !div.rounds || !div.rounds[roundIndex]) return;
   format = Number(format);
   div.rounds[roundIndex].forEach(m=>{ if(!m.done) m.format = format; });
+}
+function setMatchTimeDiv(div, matchId, timeStr){
+  const loc = findLocDiv(div, matchId);
+  if(!loc) return;
+  loc.m.timeStr = timeStr.trim();
 }
 
 /* ---------- 儲存 / 讀取 ---------- */
@@ -649,9 +653,9 @@ function playerRowPublic(name, score, isDone, isWinner){
 }
 function matchCardPublic(m, x, y, size, r, i){
   const showScore = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE;
-  const tagLabel = getMatchTagLabel(size, r, i);
+  const tagLabel = getMatchTagLabel(size, r, i, m);
   let html = '<div class="match" style="left:'+x+'px;top:'+y+'px;width:'+CARD_W+'px;height:'+CARD_H+'px;" data-names="'+escapeHtml((m.p1||'')+' '+(m.p2||'')).toLowerCase()+'">';
-  html += '<div class="match-tag">'+tagLabel+'</div>';
+  html += '<div class="match-tag">'+escapeHtml(tagLabel)+'</div>';
   html += playerRowPublic(m.p1, showScore?m.score1:'', m.done, m.done && m.winner===m.p1);
   html += playerRowPublic(m.p2, showScore?m.score2:'', m.done, m.done && m.winner===m.p2);
   html += '</div>';
@@ -939,7 +943,7 @@ function setupPanelHtml(divId, div){
 function matchRowAdmin(m, i, size, r){
   const ready = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE && !m.done;
   const canReset = m.done || m.score1>0 || m.score2>0;
-  const tagLabel = getMatchTagLabel(size, r, i);
+  const tagLabel = getMatchTagLabel(size, r, i, m);
   function side(name, isP1){
     let cls='m-side';
     if(!name) cls+=' empty';
@@ -957,12 +961,15 @@ function matchRowAdmin(m, i, size, r){
   if(m.done){ statusTxt='已完成'; statusCls=' done'; }
   else if(m.p1 && m.p2){ statusTxt='進行中'; }
   return '<div class="m-row">'+
-    '<span class="idx" style="width:55px;flex:0 0 55px;font-size:11px;color:var(--teal);font-weight:600;">'+tagLabel+'</span>'+
+    '<span class="idx" style="width:120px;flex:0 0 120px;font-size:11px;color:var(--teal);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(tagLabel)+'</span>'+
     side(m.p1, true)+
     '<span class="vs">vs</span>'+
     side(m.p2, false)+
     '<span class="status-badge'+statusCls+'">'+statusTxt+'</span>'+
-    '<span class="m-actions"><button class="btn small" '+(canReset?'':'disabled')+' onclick="onResetMatch(\''+m.id+'\')">重設</button></span>'+
+    '<span class="m-actions">'+
+      '<button class="btn small" onclick="onSetMatchTime(\''+m.id+'\')">📅 時間</button>'+
+      '<button class="btn small" '+(canReset?'':'disabled')+' onclick="onResetMatch(\''+m.id+'\')">重設</button>'+
+    '</span>'+
   '</div>';
 }
 
@@ -1025,6 +1032,17 @@ async function onSetFormat(roundIndex, value){
   await saveState();
   render();
 }
+async function onSetMatchTime(matchId){
+  const div = allState.divisions[currentDiv];
+  const loc = findLocDiv(div, matchId);
+  if(!loc) return;
+  const oldTime = loc.m.timeStr || '';
+  const newTime = prompt('請輸入比賽時間（例如：07/04 14:00，留空則移除時間）：', oldTime);
+  if(newTime === null) return; // 使用者按取消
+  setMatchTimeDiv(div, matchId, newTime);
+  await saveState();
+  render();
+}
 
 /* ============================================================
    啟動
@@ -1043,7 +1061,7 @@ async function boot(){
   pollTimer = setInterval(async ()=>{
     if(getRoute()!=='public') return;
     
-    // 1. 記錄搜尋框焦點與輸入值
+    // 1. 記錄搜尋框焦點與值
     const searchBox = document.getElementById('searchBox');
     const hadFocus = document.activeElement === searchBox;
     const val = searchBox ? searchBox.value : '';
