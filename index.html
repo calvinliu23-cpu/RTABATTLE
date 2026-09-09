@@ -263,12 +263,12 @@ firebase.initializeApp(firebaseConfig);
 const dbRef = firebase.database().ref('tournamentState');
 
 /* ============================================================
-   三組別（大師區／巔峰區／菁英區）單淘汰賽 — 資料模型與邏輯
+   三組別（菁英區／大師區／巔峰區）單淘汰賽 — 資料模型與邏輯
    ============================================================ */
 const DIVISIONS = [
+  {id:'elite',  name:'菁英區'},
   {id:'master', name:'大師區'},
-  {id:'apex',   name:'巔峰區'},
-  {id:'elite',  name:'菁英區'}
+  {id:'apex',   name:'巔峰區'}
 ];
 const SIZE_OPTIONS = [128,64,32,16];
 const CARD_W = 176;
@@ -282,7 +282,7 @@ const ADMIN_PASSWORD = 'admin123';
 const CN_NUM = ['一','二','三','四','五','六','七','八'];
 
 let allState = null;
-let currentDiv = 'master';
+let currentDiv = 'elite';
 let pollTimer = null;
 
 /* ---------- 工具函式 ---------- */
@@ -546,8 +546,8 @@ function renderPublic(app){
     html += '<div class="keyvisual-wrap"><img class="keyvisual" src="'+allState.keyVisual+'" alt="賽事主視覺"></div>';
   }
   html += '<div class="topbar">'+
-            '<div><h1>'+escapeHtml(siteTitleOrDefault())+'</h1><div class="sub">大師區・巔峰區・菁英區 賽程即時同步・僅供檢視</div></div>'+
-          '<nav></nav>'+
+            '<div><h1>'+escapeHtml(siteTitleOrDefault())+'</h1><div class="sub">菁英區・大師區・巔峰區 賽程即時同步・僅供檢視</div></div>'+
+            '<nav></nav>'+
           '</div>';
 
   html += divTabsHtml('switchDivPublic');
@@ -649,7 +649,7 @@ function renderAdmin(app){
   if(!allState){ allState = emptyAllState(); }
 
   let html = '<div class="topbar">'+
-              '<div><h1>後台管理</h1><div class="sub">大師區・巔峰區・菁英區 賽程操作</div></div>'+
+              '<div><h1>後台管理</h1><div class="sub">菁英區・大師區・巔峰區 賽程操作</div></div>'+
               '<nav style="display:flex;gap:8px;">'+
                 '<a href="#">檢視前台 →</a>'+
                 '<a href="#" onclick="adminLogout();return false;">登出</a>'+
