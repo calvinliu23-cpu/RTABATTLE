@@ -282,8 +282,14 @@
     display:flex;align-items:center;gap:10px;
     padding:9px 4px;border-bottom:1px solid var(--line);
     flex-wrap:wrap;
+    transition: background 0.3s, border 0.3s;
   }
   .m-row:last-child{border-bottom:none;}
+  .m-row.admin-hl{
+    background: var(--teal-dim);
+    border: 1px solid var(--teal);
+    border-radius: 3px;
+  }
   .m-row .idx{color:var(--muted);font-size:11px;width:26px;flex:0 0 26px;}
   .m-side{display:flex;align-items:center;gap:6px;min-width:150px;flex:1 1 150px;}
   .m-side .pname{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;}
@@ -406,14 +412,12 @@ function roundLabelsForSize(size){
 }
 function divName(id){ const d=DIVISIONS.find(x=>x.id===id); return d?d.name:id; }
 
-/* 算出場次編號字母：0->A, 25->Z, 26->A1, 27->B1, 51->Z1, 52->A2 */
 function getMatchLetter(i){
   const baseLetter = String.fromCharCode(65 + (i % 26));
   const cycle = Math.floor(i / 26);
-  return cycle === 0 ? baseTag = baseLetter : (baseLetter + cycle);
+  return cycle === 0 ? baseLetter : (baseLetter + cycle);
 }
 
-/* 算出場次標籤名稱與時間，例如：32強-A, 32強-A1 07/04 14:00 */
 function getMatchTagLabel(size, r, i, matchObj){
   const counts = matchCountsForSize(size);
   const players = counts[r] * 2;
@@ -822,6 +826,87 @@ function triggerGlobalSearch(){
   }, 100);
 }
 
+/* 後台智慧搜尋與定位 */
+function triggerAdminSearch(){
+  const input = document.getElementById('adminSearchBox');
+  if(!input) return;
+  const q = input.value.trim().toLowerCase();
+  currentQuery = input.value.trim();
+  if(!q){
+    document.querySelectorAll('.m-row').forEach(el=>el.classList.remove('admin-hl'));
+    return;
+  }
+
+  if(!allState || !allState.divisions) return;
+
+  let foundDivId = null;
+  let targetMatchId = null;
+  let targetRoundIdx = null;
+
+  // 1. 先找當前賽區
+  const currentDivObj = allState.divisions[currentDiv];
+  if(currentDivObj && currentDivObj.rounds){
+    for(let r=0; r<currentDivObj.rounds.length; r++){
+      for(const m of currentDivObj.rounds[r]){
+        const names = ((m.p1||'') + ' ' + (m.p2||'')).toLowerCase();
+        if(names.includes(q)){
+          foundDivId = currentDiv;
+          targetMatchId = m.id;
+          targetRoundIdx = r;
+          break;
+        }
+      }
+      if(foundDivId) break;
+    }
+  }
+
+  // 2. 當前賽區沒有，找其他賽區
+  if(!foundDivId){
+    for(const d of DIVISIONS){
+      const divObj = allState.divisions[d.id];
+      if(!divObj || !divObj.rounds) continue;
+      for(let r=0; r<divObj.rounds.length; r++){
+        for(const m of divObj.rounds[r]){
+          const names = ((m.p1||'') + ' ' + (m.p2||'')).toLowerCase();
+          if(names.includes(q)){
+            foundDivId = d.id;
+            targetMatchId = m.id;
+            targetRoundIdx = r;
+            break;
+          }
+        }
+        if(foundDivId) break;
+      }
+      if(foundDivId) break;
+    }
+  }
+
+  if(!foundDivId){
+    alert('未在任何賽區找到名稱包含「' + currentQuery + '」的選手');
+    return;
+  }
+
+  // 自動開啟目標輪次的折疊選單
+  openRoundBlocks[foundDivId + '_' + targetRoundIdx] = true;
+
+  if(currentDiv !== foundDivId){
+    currentDiv = foundDivId;
+    render();
+  } else {
+    render();
+  }
+
+  // 捲動並高亮該比賽列
+  setTimeout(()=>{
+    document.querySelectorAll('.m-row').forEach(el=>el.classList.remove('admin-hl'));
+    const targetRow = document.getElementById('admin_mrow_' + targetMatchId);
+    if(targetRow){
+      targetRow.classList.add('admin-hl');
+      targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, 100);
+}
+
 /* ---------------- 後台 ---------------- */
 let inMemoryAdminFlag = false;
 function isAdmin(){
@@ -844,6 +929,15 @@ function renderAdmin(app){
 
   html += siteTitlePanelHtml();
   html += keyVisualPanelHtml();
+
+  // 後台智慧搜尋框
+  html += '<div class="searchbar">'+
+            '<div class="search-input-wrap">'+
+              '<input id="adminSearchBox" type="text" value="'+escapeHtml(currentQuery)+'" placeholder="後台快速搜尋選手暱稱…" onkeydown="if(event.key===\'Enter\')triggerAdminSearch()">'+
+              '<button class="search-btn" onclick="triggerAdminSearch()" title="搜尋選手">🔍</button>'+
+            '</div>'+
+          '</div>';
+
   html += divTabsHtml('switchDivAdmin');
 
   const div = allState.divisions ? allState.divisions[currentDiv] : null;
@@ -1124,7 +1218,7 @@ function matchRowAdmin(m, i, size, r){
   let statusTxt = '待定', statusCls = '';
   if(m.done){ statusTxt='已完成'; statusCls=' done'; }
   else if(m.p1 && m.p2){ statusTxt='進行中'; }
-  return '<div class="m-row">'+
+  return '<div class="m-row" id="admin_mrow_'+m.id+'">'+
     '<span class="idx" style="width:120px;flex:0 0 120px;font-size:11px;color:var(--teal);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(tagLabel)+'</span>'+
     side(m.p1, true)+
     '<span class="vs">vs</span>'+
