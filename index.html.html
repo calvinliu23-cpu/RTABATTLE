@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>單淘汰賽對戰系統</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0b0e16;
+    --panel:#121726;
+    --panel-raised:#182036;
+    --line: rgba(255,255,255,0.10);
+    --line-strong: rgba(255,255,255,0.18);
+    --text:#eef0f6;
+    --muted:#8993ab;
+    --brass:#e3b04f;
+    --brass-dim: rgba(227,176,79,0.18);
+    --teal:#3fb8ac;
+    --teal-dim: rgba(63,184,172,0.16);
+    --danger:#e2596b;
+    --danger-dim: rgba(226,89,107,0.16);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ink);
+    color:var(--text);
+    font-family:'Inter',system-ui,-apple-system,'PingFang TC','Microsoft JhengHei',sans-serif;
+    font-variant-numeric: tabular-nums;
+    min-height:100vh;
+  }
+  h1,h2,h3,.disp{
+    font-family:'Oswald',system-ui,sans-serif;
+    letter-spacing:.02em;
+    font-weight:600;
+    margin:0;
+  }
+  a{color:var(--teal);}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;}
+  ::selection{background:var(--brass-dim);}
+
+  #app{max-width:1400px;margin:0 auto;padding:20px 20px 80px;}
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:16px;flex-wrap:wrap;
+    border-bottom:1px solid var(--line);
+    padding-bottom:14px;margin-bottom:18px;
+  }
+  .topbar h1{font-size:26px;}
+  .topbar .sub{color:var(--muted);font-size:13px;margin-top:4px;}
+  .topbar nav a{
+    color:var(--muted);text-decoration:none;font-size:13px;
+    border:1px solid var(--line);padding:6px 12px;border-radius:3px;
+  }
+  .topbar nav a:hover{color:var(--text);border-color:var(--line-strong);}
+
+  /* ---------- key visual ---------- */
+  .keyvisual-wrap{margin-bottom:18px;}
+  .keyvisual{
+    width:100%;max-height:320px;object-fit:cover;
+    border-radius:4px;border:1px solid var(--line);display:block;
+  }
+
+  /* ---------- division tabs ---------- */
+  .div-tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+  .div-tab{
+    border:1px solid var(--line);background:var(--panel);color:var(--muted);
+    padding:9px 18px;border-radius:3px;font-size:14px;font-weight:600;
+    font-family:'Oswald',sans-serif;letter-spacing:.02em;
+  }
+  .div-tab .meta{display:block;font-family:'Inter',sans-serif;font-weight:500;font-size:11px;margin-top:2px;color:var(--muted);}
+  .div-tab.active{border-color:var(--teal);color:var(--teal);background:var(--teal-dim);}
+  .div-tab.active .meta{color:var(--teal);}
+  .div-tab .crown{color:var(--brass);margin-left:4px;}
+
+  /* ---------- hero / status ---------- */
+  .hero{margin-bottom:22px;}
+  .hero .status-line{font-size:15px;color:var(--muted);}
+  .hero .champion{
+    font-family:'Oswald',sans-serif;
+    font-size:clamp(26px,4.5vw,46px);
+    font-weight:700;color:var(--brass);
+    line-height:1.1;margin-top:6px;
+  }
+  .hero .champion .lead{
+    display:block;font-family:'Inter',sans-serif;font-weight:500;
+    font-size:13px;color:var(--muted);letter-spacing:.03em;margin-bottom:6px;
+  }
+
+  /* ---------- empty state ---------- */
+  .empty{
+    border:1px dashed var(--line-strong);
+    padding:40px 24px;text-align:center;color:var(--muted);
+    border-radius:4px;
+  }
+  .empty p{margin:6px 0;}
+  .empty code{background:var(--panel-raised);padding:2px 6px;border-radius:3px;color:var(--teal);}
+
+  /* ---------- search ---------- */
+  .searchbar{margin-bottom:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .searchbar input{
+    background:var(--panel);border:1px solid var(--line);color:var(--text);
+    padding:9px 12px;border-radius:3px;font-size:14px;min-width:220px;
+  }
+  .searchbar input:focus{outline:2px solid var(--teal);outline-offset:1px;border-color:var(--teal);}
+  .searchbar .count{color:var(--muted);font-size:13px;}
+
+  /* ---------- bracket (tree diagram) ---------- */
+  .bracket-scroll{
+    max-height:72vh;overflow:auto;
+    border:1px solid var(--line);border-radius:4px;
+    background:var(--panel);
+  }
+  .bracket-header{
+    position:sticky;top:0;z-index:3;
+    display:flex;background:var(--panel-raised);
+    border-bottom:1px solid var(--line);
+  }
+  .bracket-header .rh-cell{
+    flex:0 0 auto;padding:10px 4px;
+    font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:.03em;
+  }
+  .bracket-header .rh-cell .fmt{
+    display:block;font-family:'Inter',sans-serif;font-size:11px;
+    font-weight:500;color:var(--muted);margin-top:2px;
+  }
+  .bracket-canvas{position:relative;}
+  .bconn{position:absolute;background:var(--line-strong);pointer-events:none;}
+
+  .match{
+    position:absolute;
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    border-radius:3px;
+    overflow:hidden;
+  }
+  .match.hl{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal);z-index:2;}
+  .prow{
+    display:flex;align-items:center;justify-content:space-between;
+    height:30px;box-sizing:border-box;
+    padding:0 9px;font-size:13px;gap:6px;
+    border-bottom:1px solid var(--line);
+  }
+  .prow:last-child{border-bottom:none;}
+  .prow .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .prow .score{font-weight:600;color:var(--muted);}
+  .prow.bye .name, .prow.pending .name{color:var(--muted);font-style:italic;}
+  .prow.winner{background:var(--brass-dim);}
+  .prow.winner .name{color:var(--brass);font-weight:600;}
+  .prow.winner .score{color:var(--brass);}
+
+  /* ---------- admin ---------- */
+  .gate{max-width:340px;margin:60px auto;text-align:center;}
+  .gate .disp{font-size:20px;margin-bottom:14px;}
+  .gate input{
+    width:100%;background:var(--panel);border:1px solid var(--line);color:var(--text);
+    padding:10px 12px;border-radius:3px;font-size:14px;margin-bottom:10px;
+  }
+  .gate button{
+    width:100%;background:var(--teal);color:#04211d;border:none;
+    padding:10px 12px;border-radius:3px;font-weight:600;font-size:14px;
+  }
+  .gate .err{color:var(--danger);font-size:13px;min-height:18px;margin-top:6px;}
+
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:4px;
+    padding:16px 18px;margin-bottom:18px;
+  }
+  .panel h2{font-size:16px;margin-bottom:10px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;}
+  .field textarea{
+    width:100%;min-height:140px;background:var(--ink);border:1px solid var(--line);
+    color:var(--text);border-radius:3px;padding:10px;font-size:13px;resize:vertical;
+    line-height:1.5;
+  }
+  .field select{
+    background:var(--ink);border:1px solid var(--line);color:var(--text);
+    padding:7px 10px;border-radius:3px;font-size:13px;
+  }
+  .row-inline{display:flex;gap:14px;align-items:center;flex-wrap:wrap;}
+  .checkbox-line{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);}
+  .btn{
+    border:1px solid var(--line-strong);background:var(--panel-raised);color:var(--text);
+    padding:8px 14px;border-radius:3px;font-size:13px;font-weight:500;
+  }
+  .btn:hover{border-color:var(--teal);color:var(--teal);}
+  .btn.primary{background:var(--teal);color:#04211d;border-color:var(--teal);font-weight:600;}
+  .btn.primary:hover{filter:brightness(1.08);color:#04211d;}
+  .btn.danger{background:var(--danger-dim);border-color:var(--danger);color:var(--danger);}
+  .btn.danger:hover{background:var(--danger);color:#2a0508;}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+  .btn:disabled:hover{border-color:var(--line-strong);color:var(--text);}
+  .small{font-size:12px;padding:5px 9px;}
+
+  details.round-block{
+    border:1px solid var(--line);border-radius:4px;margin-bottom:10px;overflow:hidden;
+  }
+  details.round-block summary{
+    list-style:none;cursor:pointer;padding:12px 14px;
+    background:var(--panel-raised);
+    display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  }
+  details.round-block summary::-webkit-details-marker{display:none;}
+  details.round-block summary .rname{font-family:'Oswald',sans-serif;font-size:15px;}
+  details.round-block summary .progress{font-size:12px;color:var(--muted);}
+  details.round-block summary .progress.done{color:var(--brass);}
+  .round-body{padding:6px 10px;}
+
+  .m-row{
+    display:flex;align-items:center;gap:10px;
+    padding:9px 4px;border-bottom:1px solid var(--line);
+    flex-wrap:wrap;
+  }
+  .m-row:last-child{border-bottom:none;}
+  .m-row .idx{color:var(--muted);font-size:11px;width:26px;flex:0 0 26px;}
+  .m-side{display:flex;align-items:center;gap:6px;min-width:150px;flex:1 1 150px;}
+  .m-side .pname{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;}
+  .m-side.win .pname{color:var(--brass);font-weight:600;}
+  .m-side.bye .pname, .m-side.empty .pname{color:var(--muted);font-style:italic;}
+  .scorebtn{
+    width:26px;height:26px;border-radius:3px;border:1px solid var(--line-strong);
+    background:var(--ink);color:var(--teal);font-size:14px;line-height:1;font-weight:700;
+    display:flex;align-items:center;justify-content:center;flex:0 0 26px;
+  }
+  .scorebtn:hover:not(:disabled){background:var(--teal-dim);}
+  .scoreval{font-weight:700;font-size:14px;width:16px;text-align:center;}
+  .vs{color:var(--muted);font-size:11px;padding:0 2px;}
+  .status-badge{font-size:11px;color:var(--muted);flex:0 0 auto;min-width:56px;}
+  .status-badge.done{color:var(--brass);}
+  .m-actions{flex:0 0 auto;margin-left:auto;}
+
+  .footer-note{color:var(--muted);font-size:12px;margin-top:24px;line-height:1.7;border-top:1px solid var(--line);padding-top:14px;}
+
+  @media (max-width:640px){
+    #app{padding:14px 12px 60px;}
+    .m-side .pname{max-width:90px;}
+  }
+</style>
+</head>
+<body>
+<div id="app">載入中…</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ---------- Firebase 初始化（用來取代 Claude 專屬的儲存功能） ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyD-y_QJH9CyOoVuZmHAwQrCO61XC4QnFKA",
+  authDomain: "tournament-app-74296.firebaseapp.com",
+  databaseURL: "https://tournament-app-74296-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "tournament-app-74296",
+  storageBucket: "tournament-app-74296.firebasestorage.app",
+  messagingSenderId: "360385062829",
+  appId: "1:360385062829:web:51a2db228de5d78f87e324"
+};
+firebase.initializeApp(firebaseConfig);
+const dbRef = firebase.database().ref('tournamentState');
+
+/* ============================================================
+   三組別（大師區／巔峰區／菁英區）單淘汰賽 — 資料模型與邏輯
+   每個組別可獨立選擇起始規模：128強／64強／32強／16強
+   ============================================================ */
+const DIVISIONS = [
+  {id:'master', name:'大師區'},
+  {id:'apex',   name:'巔峰區'},
+  {id:'elite',  name:'菁英區'}
+];
+const SIZE_OPTIONS = [128,64,32,16];
+const CARD_W = 176;   // 對戰卡片寬度(px)
+const CARD_H = 62;    // 對戰卡片高度(px，需與 CSS 中 .prow 高度*2+邊框 相符)
+const COL_GAP = 48;   // 輪次欄位之間的水平間距(px)，用來畫連接線
+const ROW_GAP = 14;   // 第一輪卡片之間的垂直間距(px)
+const UNIT = CARD_H + ROW_GAP;
+const TOP_PAD = 16;
+const BYE = 'BYE';
+const ADMIN_PASSWORD = 'admin123'; // 可自行修改此密碼
+const CN_NUM = ['一','二','三','四','五','六','七','八'];
+
+let allState = null;    // { divisions: { master: div|null, apex: div|null, elite: div|null } }
+let currentDiv = 'master';
+let pollTimer = null;
+
+/* ---------- 工具函式 ---------- */
+function threshold(format){ return Math.ceil((format+1)/2); }
+function formatLabel(f){ return 'BO'+f+'（先取'+threshold(f)+'勝）'; }
+function shuffleArray(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+/* 標準賽程種子序：讓輪空／強弱籤盡量平均分散到整個對戰表，而不是全部集中在同一區塊 */
+function seedOrder(n){
+  let seeds = [1];
+  while(seeds.length < n){
+    const len = seeds.length*2;
+    const next = [];
+    for(const s of seeds){ next.push(s); next.push(len+1-s); }
+    seeds = next;
+  }
+  return seeds;
+}
+function buildEvenList(realNames, size){
+  const order = seedOrder(size);
+  const list = new Array(size);
+  for(let slot=0; slot<size; slot++){
+    const seed = order[slot];
+    list[slot] = (seed <= realNames.length) ? realNames[seed-1] : BYE;
+  }
+  return list;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function matchCountsForSize(size){
+  const arr=[]; let n=size/2;
+  while(n>=1){ arr.push(n); n=n/2; }
+  return arr;
+}
+function roundLabelsForSize(size){
+  const counts = matchCountsForSize(size);
+  const labels=[];
+  for(let r=0;r<counts.length;r++){
+    const players = counts[r]*2;
+    if(players===2) labels.push('冠軍賽');
+    else if(players===4) labels.push('準決賽・4強');
+    else labels.push('第'+CN_NUM[r]+'輪・'+players+'強');
+  }
+  return labels;
+}
+function divName(id){ const d=DIVISIONS.find(x=>x.id===id); return d?d.name:id; }
+
+/* ---------- 樹狀圖座標計算 ---------- */
+function colX(r){ return r * (CARD_W + COL_GAP); }
+function computeCenters(counts){
+  const centers = [];
+  centers[0] = [];
+  for(let i=0;i<counts[0];i++) centers[0][i] = TOP_PAD + i*UNIT + CARD_H/2;
+  for(let r=1;r<counts.length;r++){
+    centers[r] = [];
+    for(let i=0;i<counts[r];i++){
+      centers[r][i] = (centers[r-1][2*i] + centers[r-1][2*i+1]) / 2;
+    }
+  }
+  return centers;
+}
+function connLine(x, y, w, h){
+  return '<div class="bconn" style="left:'+x+'px;top:'+(y-h/2)+'px;width:'+w+'px;height:'+h+'px;"></div>';
+}
+function connLineV(x, y, h, w){
+  return '<div class="bconn" style="left:'+(x-w/2)+'px;top:'+y+'px;width:'+w+'px;height:'+h+'px;"></div>';
+}
+function connectorsHtml(counts, centers){
+  let html = '';
+  const THICK = 2;
+  for(let r=1;r<counts.length;r++){
+    const childRightX = colX(r-1) + CARD_W;
+    const midX = childRightX + COL_GAP/2;
+    const parentX = colX(r);
+    for(let i=0;i<counts[r];i++){
+      const y0 = centers[r-1][2*i], y1 = centers[r-1][2*i+1], yp = centers[r][i];
+      html += connLine(childRightX, y0, midX-childRightX, THICK);
+      html += connLine(childRightX, y1, midX-childRightX, THICK);
+      html += connLineV(midX, Math.min(y0,y1), Math.abs(y1-y0), THICK);
+      html += connLine(midX, yp, parentX-midX, THICK);
+    }
+  }
+  return html;
+}
+
+/* ---------- 建立單一組別賽事 ---------- */
+function buildDivision(names, size, format, shuffle, evenSpread){
+  const counts = matchCountsForSize(size);
+  const totalRounds = counts.length;
+  let real = names.slice(0, size);
+  if(shuffle) real = shuffleArray(real);
+
+  let list;
+  if(evenSpread){
+    list = buildEvenList(real, size);
+  } else {
+    list = real.slice();
+    while(list.length < size) list.push(BYE);
+  }
+
+  const rounds = [];
+  for(let r=0;r<totalRounds;r++){
+    const count = counts[r];
+    const arr = [];
+    for(let i=0;i<count;i++){
+      let p1=null, p2=null;
+      if(r===0){ p1=list[i*2]; p2=list[i*2+1]; }
+      arr.push({id:'r'+r+'_'+i, p1, p2, score1:0, score2:0, winner:null, format, done:false});
+    }
+    rounds.push(arr);
+  }
+  const div = {size, totalRounds, rounds, champion:null, createdAt:Date.now()};
+  resolveAllDiv(div);
+  return div;
+}
+
+function resolveAllDiv(div){
+  for(let r=0;r<div.totalRounds;r++){
+    const round = div.rounds[r];
+    for(const m of round){
+      if(!m.done && m.p1 && m.p2){
+        if(m.p1===BYE && m.p2===BYE){ m.winner=BYE; m.done=true; }
+        else if(m.p1===BYE){ m.winner=m.p2; m.done=true; }
+        else if(m.p2===BYE){ m.winner=m.p1; m.done=true; }
+      }
+    }
+    if(r+1 < div.totalRounds){
+      const next = div.rounds[r+1];
+      for(let i=0;i<next.length;i++){
+        const left = round[2*i], right = round[2*i+1];
+        const m = next[i];
+        if(left && left.done && m.p1==null) m.p1 = left.winner;
+        if(right && right.done && m.p2==null) m.p2 = right.winner;
+      }
+    } else {
+      div.champion = (round[0].done && round[0].winner!==BYE) ? round[0].winner : null;
+    }
+  }
+}
+
+function findLocDiv(div, matchId){
+  for(let r=0;r<div.totalRounds;r++){
+    const i = div.rounds[r].findIndex(m=>m.id===matchId);
+    if(i>=0) return {r,i,m:div.rounds[r][i]};
+  }
+  return null;
+}
+function addPointDiv(div, matchId, side){
+  const loc = findLocDiv(div, matchId);
+  if(!loc) return;
+  const m = loc.m;
+  if(m.done || !m.p1 || !m.p2 || m.p1===BYE || m.p2===BYE) return;
+  if(side===1) m.score1++; else m.score2++;
+  const th = threshold(m.format);
+  if(m.score1>=th){ m.winner=m.p1; m.done=true; }
+  else if(m.score2>=th){ m.winner=m.p2; m.done=true; }
+  resolveAllDiv(div);
+}
+function clearForwardDiv(div, r, i){
+  if(r+1>=div.totalRounds){ div.champion=null; return; }
+  const nextIndex = Math.floor(i/2);
+  const next = div.rounds[r+1][nextIndex];
+  const isLeft = (i%2===0);
+  if(isLeft) next.p1=null; else next.p2=null;
+  if(next.done || next.winner || next.score1>0 || next.score2>0){
+    next.score1=0; next.score2=0; next.winner=null; next.done=false;
+    clearForwardDiv(div, r+1, nextIndex);
+  }
+}
+function resetMatchDiv(div, matchId){
+  const loc = findLocDiv(div, matchId);
+  if(!loc) return;
+  const m = loc.m;
+  m.score1=0; m.score2=0; m.winner=null; m.done=false;
+  clearForwardDiv(div, loc.r, loc.i);
+}
+function setRoundFormatDiv(div, roundIndex, format){
+  format = Number(format);
+  div.rounds[roundIndex].forEach(m=>{ if(!m.done) m.format = format; });
+}
+
+/* ---------- 儲存 / 讀取（透過 Firebase Realtime Database） ---------- */
+function emptyAllState(){ return {divisions:{master:null, apex:null, elite:null}, keyVisual:null, siteTitle:''}; }
+async function loadState(){
+  try{
+    const snap = await dbRef.once('value');
+    return snap.exists() ? snap.val() : null;
+  }catch(e){ console.error('讀取失敗', e); return null; }
+}
+async function saveState(){
+  try{
+    await dbRef.set(allState);
+  }catch(e){ console.error('儲存失敗', e); }
+}
+
+/* ============================================================
+   路由 / 畫面渲染
+   ============================================================ */
+function getRoute(){ return location.hash.replace('#','').split('?')[0] === 'admin' ? 'admin' : 'public'; }
+
+function render(){
+  const app = document.getElementById('app');
+  document.title = siteTitleOrDefault() + (getRoute()==='admin' ? '｜後台管理' : '');
+  if(getRoute()==='admin') renderAdmin(app);
+  else renderPublic(app);
+}
+
+function siteTitleOrDefault(){
+  return (allState && allState.siteTitle && allState.siteTitle.trim()) ? allState.siteTitle.trim() : '單淘汰賽對戰系統';
+}
+
+function divTabsHtml(onclickFn){
+  let html = '<div class="div-tabs">';
+  DIVISIONS.forEach(d=>{
+    const div = allState ? allState.divisions[d.id] : null;
+    const active = currentDiv===d.id;
+    let meta = '尚未建立';
+    if(div){
+      const done = div.rounds.reduce((a,r)=>a+r.filter(m=>m.done).length,0);
+      const total = div.rounds.reduce((a,r)=>a+r.length,0);
+      meta = div.size+'強賽制・'+done+'/'+total+' 場';
+    }
+    html += '<button class="div-tab'+(active?' active':'')+'" onclick="'+onclickFn+'(\''+d.id+'\')">'+
+              d.name + (div && div.champion ? '<span class="crown">&#9819;</span>' : '') +
+              '<span class="meta">'+meta+'</span>'+
+            '</button>';
+  });
+  html += '</div>';
+  return html;
+}
+
+/* ---------------- 前台（公開頁面） ---------------- */
+function switchDivPublic(id){ currentDiv=id; render(); }
+
+function renderPublic(app){
+  if(!allState){ allState = emptyAllState(); }
+  let html = '';
+  if(allState.keyVisual){
+    html += '<div class="keyvisual-wrap"><img class="keyvisual" src="'+allState.keyVisual+'" alt="賽事主視覺"></div>';
+  }
+  html += '<div class="topbar">'+
+            '<div><h1>'+escapeHtml(siteTitleOrDefault())+'</h1><div class="sub">大師區・巔峰區・菁英區　賽程即時同步・僅供檢視</div></div>'+
+            '<nav><a href="#admin">後台管理 →</a></nav>'+
+          '</div>';
+
+  html += divTabsHtml('switchDivPublic');
+
+  const div = allState.divisions[currentDiv];
+  if(!div){
+    html += '<div class="empty"><p>「'+divName(currentDiv)+'」尚未建立賽程。</p>'+
+            '<p>請由後台建立：於網址列加上 <code>#admin</code> 進入管理介面。</p></div>';
+    app.innerHTML = html;
+    return;
+  }
+
+  const totalMatches = div.rounds.reduce((a,r)=>a+r.length,0);
+  const doneMatches = div.rounds.reduce((a,r)=>a+r.filter(m=>m.done).length,0);
+  const realPlayers = div.rounds[0].reduce((a,m)=>a+[m.p1,m.p2].filter(p=>p&&p!==BYE).length,0);
+  const labels = roundLabelsForSize(div.size);
+
+  html += '<div class="hero">';
+  if(div.champion){
+    html += '<div class="champion"><span class="lead">'+divName(currentDiv)+'・賽事結束・冠軍</span>'+escapeHtml(div.champion)+'</div>';
+  } else {
+    let liveRound = div.rounds.findIndex(r=>r.some(m=>!m.done));
+    if(liveRound<0) liveRound = div.totalRounds-1;
+    html += '<div class="status-line">'+divName(currentDiv)+'目前進行到「'+labels[liveRound]+'」・共 '+totalMatches+' 場，已完成 '+doneMatches+' 場</div>';
+  }
+  html += '</div>';
+
+  html += '<div class="searchbar">'+
+            '<input id="searchBox" type="text" placeholder="搜尋選手暱稱…" oninput="filterBracket(this.value)">'+
+            '<span class="count">共 '+realPlayers+' 位選手・'+totalMatches+' 場比賽</span>'+
+          '</div>';
+
+  html += '<div class="bracket-scroll">';
+  const counts = matchCountsForSize(div.size);
+  const centers = computeCenters(counts);
+  const canvasWidth = div.totalRounds*CARD_W + (div.totalRounds-1)*COL_GAP + 20;
+  const canvasHeight = TOP_PAD*2 + counts[0]*CARD_H + (counts[0]-1)*ROW_GAP;
+
+  html += '<div class="bracket-header">';
+  for(let r=0;r<div.totalRounds;r++){
+    html += '<div class="rh-cell" style="width:'+CARD_W+'px;margin-right:'+(r<div.totalRounds-1?COL_GAP:0)+'px;">'+
+              labels[r]+'<span class="fmt">'+formatLabel(div.rounds[r][0]?div.rounds[r][0].format:3)+'</span>'+
+            '</div>';
+  }
+  html += '</div>';
+
+  html += '<div class="bracket-canvas" style="width:'+canvasWidth+'px;height:'+canvasHeight+'px;">';
+  html += connectorsHtml(counts, centers);
+  for(let r=0;r<div.totalRounds;r++){
+    const x = colX(r);
+    div.rounds[r].forEach((m,i)=>{
+      const y = centers[r][i] - CARD_H/2;
+      html += matchCardPublic(m, x, y);
+    });
+  }
+  html += '</div></div>';
+
+  html += '<div class="footer-note">此頁面每 5 秒自動同步後台最新結果。若比分未即時更新，可手動重新整理頁面。</div>';
+
+  app.innerHTML = html;
+}
+
+function playerRowPublic(name, score, isDone, isWinner){
+  let cls = 'prow';
+  if(isWinner) cls += ' winner';
+  if(!name) cls += ' pending';
+  else if(name===BYE) cls += ' bye';
+  const label = name ? (name===BYE?'輪空':escapeHtml(name)) : '待定';
+  const scoreTxt = (name && name!==BYE && isDone!==null) ? score : '';
+  return '<div class="'+cls+'"><span class="name">'+label+'</span><span class="score">'+scoreTxt+'</span></div>';
+}
+function matchCardPublic(m, x, y){
+  const showScore = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE;
+  let html = '<div class="match" style="left:'+x+'px;top:'+y+'px;width:'+CARD_W+'px;height:'+CARD_H+'px;" data-names="'+escapeHtml((m.p1||'')+' '+(m.p2||'')).toLowerCase()+'">';
+  html += playerRowPublic(m.p1, showScore?m.score1:'', m.done, m.done && m.winner===m.p1);
+  html += playerRowPublic(m.p2, showScore?m.score2:'', m.done, m.done && m.winner===m.p2);
+  html += '</div>';
+  return html;
+}
+function filterBracket(q){
+  q = q.trim().toLowerCase();
+  document.querySelectorAll('.match').forEach(el=>{
+    const names = el.getAttribute('data-names')||'';
+    if(q && names.includes(q)) el.classList.add('hl');
+    else el.classList.remove('hl');
+  });
+}
+
+/* ---------------- 後台（管理介面） ---------------- */
+function isAdmin(){ return sessionStorage.getItem('bracket3div_admin')==='1'; }
+function switchDivAdmin(id){ currentDiv=id; render(); }
+
+function renderAdmin(app){
+  if(!isAdmin()){ renderAdminGate(app); return; }
+  if(!allState){ allState = emptyAllState(); }
+
+  let html = '<div class="topbar">'+
+              '<div><h1>後台管理</h1><div class="sub">大師區・巔峰區・菁英區　賽程操作</div></div>'+
+              '<nav style="display:flex;gap:8px;">'+
+                '<a href="#">檢視前台 →</a>'+
+                '<a href="#" onclick="adminLogout();return false;">登出</a>'+
+              '</nav>'+
+            '</div>';
+
+  html += siteTitlePanelHtml();
+  html += keyVisualPanelHtml();
+  html += divTabsHtml('switchDivAdmin');
+
+  const div = allState.divisions[currentDiv];
+  html += setupPanelHtml(currentDiv, div);
+  html += seedEditorHtml(currentDiv, div);
+
+  if(div){
+    const labels = roundLabelsForSize(div.size);
+    if(div.champion){
+      html += '<div class="hero"><div class="champion"><span class="lead">'+divName(currentDiv)+'・賽事結束・冠軍</span>'+escapeHtml(div.champion)+'</div></div>';
+    }
+    const firstOpenRound = div.rounds.findIndex(r=>r.some(m=>!m.done));
+    for(let r=0;r<div.totalRounds;r++){
+      const round = div.rounds[r];
+      const doneCount = round.filter(m=>m.done).length;
+      const allDone = doneCount===round.length;
+      const openAttr = (r===firstOpenRound || (firstOpenRound<0 && r===div.totalRounds-1)) ? ' open' : '';
+      html += '<details class="round-block"'+openAttr+'>';
+      html += '<summary>'+
+                '<span class="rname">'+labels[r]+'</span>'+
+                '<span class="row-inline">'+
+                  '<select class="small" onchange="onSetFormat('+r+',this.value)" onclick="event.stopPropagation()">'+
+                    [3,4,5].map(f=>'<option value="'+f+'"'+(round[0]&&round[0].format===f?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+
+                  '</select>'+
+                  '<span class="progress'+(allDone?' done':'')+'">'+doneCount+' / '+round.length+' 完成</span>'+
+                '</span>'+
+              '</summary>';
+      html += '<div class="round-body">';
+      round.forEach((m,i)=>{ html += matchRowAdmin(m,i); });
+      html += '</div></details>';
+    }
+  }
+
+  html += '<div class="footer-note">前台網址：本頁面移除網址列的 <code>#admin</code> 即為前台頁面，可分享給選手與觀眾檢視即時賽況（比分資料為共用儲存，任何持有連結者皆可檢視）。三個組別的賽程與比分彼此獨立，互不影響。</div>';
+
+  app.innerHTML = html;
+}
+
+function renderAdminGate(app){
+  app.innerHTML =
+    '<div class="gate">'+
+      '<div class="disp">後台管理登入</div>'+
+      '<input id="pwBox" type="password" placeholder="請輸入管理密碼" onkeydown="if(event.key===\'Enter\')adminLogin()">'+
+      '<button class="btn primary" onclick="adminLogin()" style="width:100%">登入</button>'+
+      '<div class="err" id="pwErr"></div>'+
+      '<div class="footer-note" style="text-align:left">預設密碼為 <code>admin123</code>，可於檔案原始碼中修改 ADMIN_PASSWORD 常數。</div>'+
+    '</div>';
+}
+
+function siteTitlePanelHtml(){
+  return '<div class="panel"><h2>賽事標題</h2>'+
+    '<div class="row-inline">'+
+      '<input type="text" id="siteTitleInput" value="'+escapeHtml(allState.siteTitle||'')+'" placeholder="例如：2026 夏季盃三組別單淘汰賽" style="flex:1 1 260px;background:var(--ink);border:1px solid var(--line);color:var(--text);padding:8px 10px;border-radius:3px;font-size:14px;">'+
+      '<button class="btn primary small" onclick="onSaveTitle()">儲存標題</button>'+
+    '</div>'+
+    '<div class="footer-note" style="margin-top:8px;padding-top:8px;">此標題會顯示在前台頁面最上方，以及瀏覽器分頁標題。留空則顯示預設標題「'+escapeHtml(siteTitleOrDefault())+'」。</div>'+
+  '</div>';
+}
+
+async function onSaveTitle(){
+  const val = document.getElementById('siteTitleInput').value.trim();
+  allState.siteTitle = val;
+  await saveState();
+  render();
+}
+
+function keyVisualPanelHtml(){
+  let html = '<div class="panel"><h2>賽事主視覺</h2>';
+  if(allState.keyVisual){
+    html += '<img src="'+allState.keyVisual+'" alt="主視覺預覽" style="max-width:100%;max-height:160px;border-radius:3px;border:1px solid var(--line);display:block;margin-bottom:10px;">';
+  } else {
+    html += '<p style="color:var(--muted);font-size:13px;margin:0 0 10px;">尚未上傳主視覺圖片，前台頁面目前不會顯示橫幅圖。</p>';
+  }
+  html += '<div class="row-inline">'+
+            '<input type="file" accept="image/*" id="keyVisualInput" onchange="onKeyVisualChange(this)">'+
+            (allState.keyVisual ? '<button class="btn danger small" onclick="removeKeyVisual()">移除圖片</button>' : '')+
+          '</div>'+
+          '<div class="footer-note" style="margin-top:8px;padding-top:8px;">圖片會自動縮放、壓縮後以文字格式存入共用儲存空間，建議使用長寬比接近 16:9～3:1 的橫幅圖；檔案較大時會自動降低畫質以符合儲存限制。</div>'+
+        '</div>';
+  return html;
+}
+
+function processImageFile(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const maxW = 1600;
+        let w = img.width, h = img.height;
+        if(w > maxW){ h = Math.round(h * maxW / w); w = maxW; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        let quality = 0.85;
+        let dataUrl = canvas.toDataURL('image/jpeg', quality);
+        while(dataUrl.length > 4.5*1024*1024 && quality > 0.35){
+          quality -= 0.1;
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+        if(dataUrl.length > 4.8*1024*1024){ reject(new Error('圖片經壓縮後仍過大，請換一張較小或較簡單的圖片再試一次。')); return; }
+        resolve(dataUrl);
+      };
+      img.onerror = ()=>reject(new Error('圖片讀取失敗，請確認檔案是否為有效的圖片格式。'));
+      img.src = reader.result;
+    };
+    reader.onerror = ()=>reject(new Error('檔案讀取失敗，請再試一次。'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function onKeyVisualChange(inputEl){
+  const file = inputEl.files && inputEl.files[0];
+  if(!file) return;
+  if(!file.type.startsWith('image/')){ alert('請選擇圖片檔案。'); inputEl.value=''; return; }
+  try{
+    const dataUrl = await processImageFile(file);
+    if(!allState) allState = emptyAllState();
+    allState.keyVisual = dataUrl;
+    await saveState();
+    render();
+  }catch(e){
+    alert(e.message || '圖片處理失敗，請換一張圖片再試。');
+    inputEl.value='';
+  }
+}
+async function removeKeyVisual(){
+  if(!confirm('確定要移除目前的主視覺圖片嗎？')) return;
+  allState.keyVisual = null;
+  await saveState();
+  render();
+}
+
+function divIsUntouched(div){
+  return div.rounds.every(round => round.every(m => m.score1===0 && m.score2===0));
+}
+
+function reseedDivision(div, names){
+  let list = names.slice(0, div.size);
+  while(list.length < div.size) list.push(BYE);
+  const round0 = div.rounds[0];
+  for(let i=0;i<round0.length;i++){
+    round0[i].p1 = list[i*2] || BYE;
+    round0[i].p2 = list[i*2+1] || BYE;
+    round0[i].score1 = 0; round0[i].score2 = 0; round0[i].winner = null; round0[i].done = false;
+  }
+  for(let r=1;r<div.totalRounds;r++){
+    div.rounds[r].forEach(m=>{ m.p1=null; m.p2=null; m.score1=0; m.score2=0; m.winner=null; m.done=false; });
+  }
+  div.champion = null;
+  resolveAllDiv(div);
+}
+
+function seedEditorHtml(divId, div){
+  if(!div) return '';
+  const untouched = divIsUntouched(div);
+  const currentOrder = [];
+  div.rounds[0].forEach(m=>{ currentOrder.push(m.p1||''); currentOrder.push(m.p2||''); });
+  let html = '<details class="round-block"><summary>'+
+      '<span class="rname">調整第一輪對戰位置</span>'+
+      '<span class="progress'+(untouched?'':' done')+'">'+(untouched?'可自由排列順位與輪空位置':'已有比分紀錄，無法調整')+'</span>'+
+    '</summary><div class="round-body">';
+  if(untouched){
+    html += '<div class="field"><label>依序列出第一輪每個位置的選手（每行一位，共 '+div.size+' 格；想安排輪空的位置直接輸入 BYE 或留空）</label>'+
+        '<textarea id="seedInput_'+divId+'">'+escapeHtml(currentOrder.join('\n'))+'</textarea>'+
+      '</div>'+
+      '<div class="row-inline">'+
+        '<button class="btn primary" onclick="onApplySeed(\''+divId+'\')">套用新的位置排列</button>'+
+        '<button class="btn small" onclick="onAutoSpreadSeed(\''+divId+'\')">自動平均分散輪空</button>'+
+        '<span style="color:var(--muted);font-size:12px;">相鄰兩行是同一場比賽（第1、2行對第1場，第3、4行對第2場，依此類推）</span>'+
+      '</div>';
+  } else {
+    html += '<p style="color:var(--muted);font-size:13px;margin:0;">此組別已經有比賽比分紀錄，若要重新安排位置，請先用上方「重新建立賽程」清除後再重新設定。</p>';
+  }
+  html += '</div></details>';
+  return html;
+}
+
+function onAutoSpreadSeed(divId){
+  const div = allState.divisions[divId];
+  if(!div) return;
+  const ta = document.getElementById('seedInput_'+divId);
+  const lines = ta.value.split('\n').map(s=>s.trim());
+  const realNames = lines.filter(s => s!=='' && s.toUpperCase()!==BYE);
+  const list = buildEvenList(realNames, div.size);
+  ta.value = list.join('\n');
+}
+
+async function onApplySeed(divId){
+  const div = allState.divisions[divId];
+  if(!div) return;
+  const ta = document.getElementById('seedInput_'+divId);
+  const lines = ta.value.split('\n').map(s=>s.trim());
+  if(lines.length > div.size){
+    if(!confirm('目前輸入了 '+lines.length+' 行，超過 '+div.size+' 格，多出的行將被捨棄，是否繼續？')) return;
+  }
+  if(!confirm('確定要套用這個新的位置排列嗎？此動作會重置「'+divName(divId)+'」目前所有比分與晉級結果。')) return;
+  const names = lines.map(s => s===''? BYE : s);
+  reseedDivision(div, names);
+  await saveState();
+  render();
+}
+
+function setupPanelHtml(divId, div){
+  const sizeOptionsHtml = size => SIZE_OPTIONS.map(s=>'<option value="'+s+'"'+(s===size?' selected':'')+'>'+s+'強起始</option>').join('');
+  if(!div){
+    return '<div class="panel">'+
+      '<h2>建立「'+divName(divId)+'」賽程</h2>'+
+      '<div class="row-inline" style="margin-bottom:12px;">'+
+        '<div class="field" style="margin-bottom:0;"><label>起始規模（人數不足 128 時，可從較小規模開始抽籤）</label>'+
+          '<select id="sizeSelect">'+sizeOptionsHtml(128)+'</select>'+
+        '</div>'+
+        '<div class="field" style="margin-bottom:0;"><label>預設賽制</label>'+
+          '<select id="defaultFormat">'+[3,4,5].map(f=>'<option value="'+f+'"'+(f===3?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+'</select>'+
+        '</div>'+
+        '<label class="checkbox-line"><input type="checkbox" id="shuffleCheck" checked> 建立前隨機排籤</label>'+
+        '<label class="checkbox-line"><input type="checkbox" id="evenSpreadCheck" checked> 輪空平均分散（建議）</label>'+
+      '</div>'+
+      '<div class="field"><label>選手暱稱（每行一位；人數不足所選規模時，其餘將自動以「輪空」補滿並自動晉級）</label>'+
+        '<textarea id="namesInput" placeholder="請貼上選手暱稱，每行一位…"></textarea>'+
+      '</div>'+
+      '<div class="row-inline">'+
+        '<button class="btn primary" onclick="createTournamentUI(\''+divId+'\')">建立賽程</button>'+
+        '<button class="btn small" onclick="fillSampleNames()">填入測試名單</button>'+
+      '</div>'+
+    '</div>';
+  }
+  return '<details class="round-block"><summary><span class="rname">重新建立「'+divName(divId)+'」賽程</span><span class="progress">將清除此組別目前所有結果</span></summary>'+
+    '<div class="round-body">'+
+      '<div class="row-inline" style="margin-bottom:12px;">'+
+        '<div class="field" style="margin-bottom:0;"><label>起始規模</label>'+
+          '<select id="sizeSelect">'+sizeOptionsHtml(div.size)+'</select>'+
+        '</div>'+
+        '<div class="field" style="margin-bottom:0;"><label>預設賽制</label>'+
+          '<select id="defaultFormat">'+[3,4,5].map(f=>'<option value="'+f+'"'+(f===3?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+'</select>'+
+        '</div>'+
+        '<label class="checkbox-line"><input type="checkbox" id="shuffleCheck" checked> 建立前隨機排籤</label>'+
+        '<label class="checkbox-line"><input type="checkbox" id="evenSpreadCheck" checked> 輪空平均分散（建議）</label>'+
+      '</div>'+
+      '<div class="field"><label>選手暱稱（每行一位）</label>'+
+        '<textarea id="namesInput" placeholder="請貼上選手暱稱，每行一位…"></textarea>'+
+      '</div>'+
+      '<div class="row-inline">'+
+        '<button class="btn danger" onclick="createTournamentUI(\''+divId+'\')">清除並重新建立</button>'+
+        '<button class="btn small" onclick="fillSampleNames()">填入測試名單</button>'+
+      '</div>'+
+    '</div></details>';
+}
+
+function matchRowAdmin(m, i){
+  const ready = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE && !m.done;
+  const canReset = m.done || m.score1>0 || m.score2>0;
+  function side(name, isP1){
+    let cls='m-side';
+    if(!name) cls+=' empty';
+    else if(name===BYE) cls+=' bye';
+    else if(m.done && m.winner===name) cls+=' win';
+    const label = name ? (name===BYE?'輪空':escapeHtml(name)) : '待定';
+    const disabled = !ready;
+    return '<div class="'+cls+'">'+
+      '<span class="pname" title="'+label+'">'+label+'</span>'+
+      (name && name!==BYE ? '<span class="scoreval">'+(isP1?m.score1:m.score2)+'</span>'+
+        '<button class="scorebtn" '+(disabled?'disabled':'')+' onclick="onAddPoint(\''+m.id+'\','+(isP1?1:2)+')">+1</button>' : '')+
+      '</div>';
+  }
+  let statusTxt = '待定', statusCls = '';
+  if(m.done){ statusTxt='已完成'; statusCls=' done'; }
+  else if(m.p1 && m.p2){ statusTxt='進行中'; }
+  return '<div class="m-row">'+
+    '<span class="idx">#'+(i+1)+'</span>'+
+    side(m.p1, true)+
+    '<span class="vs">vs</span>'+
+    side(m.p2, false)+
+    '<span class="status-badge'+statusCls+'">'+statusTxt+'</span>'+
+    '<span class="m-actions"><button class="btn small" '+(canReset?'':'disabled')+' onclick="onResetMatch(\''+m.id+'\')">重設</button></span>'+
+  '</div>';
+}
+
+/* ---------- 後台事件處理 ---------- */
+let inMemoryAdminFlag = false; // 部分瀏覽器環境（如內嵌分享頁面）會封鎖 sessionStorage，改用記憶體變數保底
+function isAdmin(){
+  try{ return sessionStorage.getItem('bracket3div_admin')==='1' || inMemoryAdminFlag; }
+  catch(e){ return inMemoryAdminFlag; }
+}
+function adminLogin(){
+  const pw = document.getElementById('pwBox').value;
+  if(pw===ADMIN_PASSWORD){
+    inMemoryAdminFlag = true;
+    try{ sessionStorage.setItem('bracket3div_admin','1'); }catch(e){ /* 忽略，改用記憶體狀態 */ }
+    render();
+  } else {
+    document.getElementById('pwErr').textContent = '密碼錯誤，請再試一次。';
+  }
+}
+function adminLogout(){
+  inMemoryAdminFlag = false;
+  try{ sessionStorage.removeItem('bracket3div_admin'); }catch(e){ /* 忽略 */ }
+  render();
+}
+
+function fillSampleNames(){
+  const sizeSel = document.getElementById('sizeSelect');
+  const n = sizeSel ? Number(sizeSel.value) : 128;
+  const ta = document.getElementById('namesInput');
+  const arr = [];
+  for(let i=1;i<=n;i++) arr.push('Player'+String(i).padStart(3,'0'));
+  ta.value = arr.join('\n');
+}
+
+async function createTournamentUI(divId){
+  const size = Number(document.getElementById('sizeSelect').value);
+  const ta = document.getElementById('namesInput');
+  const raw = ta.value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(raw.length===0){ alert('請至少輸入一位選手暱稱。'); return; }
+  if(raw.length>size){ alert('已輸入超過 '+size+' 位，僅取前 '+size+' 位。'); }
+  if(allState.divisions[divId] && !confirm('確定要清除「'+divName(divId)+'」目前賽程並重新建立嗎？此動作無法復原。')) return;
+  const format = Number(document.getElementById('defaultFormat').value);
+  const shuffle = document.getElementById('shuffleCheck').checked;
+  const evenSpread = document.getElementById('evenSpreadCheck').checked;
+  allState.divisions[divId] = buildDivision(raw, size, format, shuffle, evenSpread);
+  await saveState();
+  render();
+}
+
+async function onAddPoint(matchId, side){
+  const div = allState.divisions[currentDiv];
+  addPointDiv(div, matchId, side);
+  await saveState();
+  render();
+}
+async function onResetMatch(matchId){
+  if(!confirm('確定要重設此場比賽的比分嗎？')) return;
+  const div = allState.divisions[currentDiv];
+  resetMatchDiv(div, matchId);
+  await saveState();
+  render();
+}
+async function onSetFormat(roundIndex, value){
+  const div = allState.divisions[currentDiv];
+  setRoundFormatDiv(div, roundIndex, value);
+  await saveState();
+  render();
+}
+
+/* ============================================================
+   啟動
+   ============================================================ */
+window.addEventListener('hashchange', async ()=>{
+  if(getRoute()==='public'){
+    const loaded = await loadState();
+    if(loaded) allState = loaded; // 讀取失敗時保留記憶體中現有的資料，避免畫面被清空
+  }
+  render();
+});
+
+async function boot(){
+  allState = await loadState();
+  render();
+  pollTimer = setInterval(async ()=>{
+    if(getRoute()!=='public') return;
+    const searchBox = document.getElementById('searchBox');
+    const hadFocus = document.activeElement === searchBox;
+    const val = searchBox ? searchBox.value : '';
+    const cursor = searchBox ? searchBox.selectionStart : 0;
+    const loaded = await loadState();
+    if(loaded) allState = loaded;
+    render();
+    const newBox = document.getElementById('searchBox');
+    if(newBox && val){
+      newBox.value = val;
+      filterBracket(val);
+      if(hadFocus){ newBox.focus(); newBox.setSelectionRange(cursor,cursor); }
+    }
+  }, 5000);
+}
+boot();
+</script>
+</body>
+</html>
