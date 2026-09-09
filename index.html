@@ -137,9 +137,28 @@
     background:var(--panel-raised);
     border:1px solid var(--line);
     border-radius:3px;
-    overflow:hidden;
+    overflow:visible;
   }
   .match.hl{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal);z-index:2;}
+  
+  /* 小小的對戰組合標籤（如 32強-A） */
+  .match-tag{
+    position:absolute;
+    top:-8px;
+    right:4px;
+    background:#080c14;
+    border:1px solid var(--line-strong);
+    color:var(--teal);
+    font-size:9px;
+    font-weight:600;
+    padding:0px 5px;
+    border-radius:2px;
+    line-height:13px;
+    z-index:1;
+    pointer-events:none;
+    letter-spacing:0.03em;
+  }
+
   .prow{
     display:flex;align-items:center;justify-content:space-between;
     height:30px;box-sizing:border-box;
@@ -335,6 +354,15 @@ function roundLabelsForSize(size){
   return labels;
 }
 function divName(id){ const d=DIVISIONS.find(x=>x.id===id); return d?d.name:id; }
+
+/* 算出場次標籤名稱，例如：32強-A, 16強-B, 冠軍賽-A */
+function getMatchTagLabel(size, r, i){
+  const counts = matchCountsForSize(size);
+  const players = counts[r] * 2;
+  const letter = String.fromCharCode(65 + i); // 0->A, 1->B, 2->C...
+  if(players === 2) return '冠軍賽';
+  return players + '強-' + letter;
+}
 
 /* ---------- 樹狀圖座標計算 ---------- */
 function colX(r){ return r * (CARD_W + COL_GAP); }
@@ -600,7 +628,7 @@ function renderPublic(app){
     const x = colX(r);
     div.rounds[r].forEach((m,i)=>{
       const y = centers[r][i] - CARD_H/2;
-      html += matchCardPublic(m, x, y);
+      html += matchCardPublic(m, x, y, div.size, r, i);
     });
   }
   html += '</div></div>';
@@ -619,9 +647,11 @@ function playerRowPublic(name, score, isDone, isWinner){
   const scoreTxt = (name && name!==BYE && isDone!==null) ? score : '';
   return '<div class="'+cls+'"><span class="name">'+label+'</span><span class="score">'+scoreTxt+'</span></div>';
 }
-function matchCardPublic(m, x, y){
+function matchCardPublic(m, x, y, size, r, i){
   const showScore = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE;
+  const tagLabel = getMatchTagLabel(size, r, i);
   let html = '<div class="match" style="left:'+x+'px;top:'+y+'px;width:'+CARD_W+'px;height:'+CARD_H+'px;" data-names="'+escapeHtml((m.p1||'')+' '+(m.p2||'')).toLowerCase()+'">';
+  html += '<div class="match-tag">'+tagLabel+'</div>';
   html += playerRowPublic(m.p1, showScore?m.score1:'', m.done, m.done && m.winner===m.p1);
   html += playerRowPublic(m.p2, showScore?m.score2:'', m.done, m.done && m.winner===m.p2);
   html += '</div>';
@@ -686,7 +716,7 @@ function renderAdmin(app){
                 '</span>'+
               '</summary>';
       html += '<div class="round-body">';
-      round.forEach((m,i)=>{ html += matchRowAdmin(m,i); });
+      round.forEach((m,i)=>{ html += matchRowAdmin(m,i,div.size,r); });
       html += '</div></details>';
     }
   }
@@ -906,9 +936,10 @@ function setupPanelHtml(divId, div){
     '</div></details>';
 }
 
-function matchRowAdmin(m, i){
+function matchRowAdmin(m, i, size, r){
   const ready = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE && !m.done;
   const canReset = m.done || m.score1>0 || m.score2>0;
+  const tagLabel = getMatchTagLabel(size, r, i);
   function side(name, isP1){
     let cls='m-side';
     if(!name) cls+=' empty';
@@ -926,7 +957,7 @@ function matchRowAdmin(m, i){
   if(m.done){ statusTxt='已完成'; statusCls=' done'; }
   else if(m.p1 && m.p2){ statusTxt='進行中'; }
   return '<div class="m-row">'+
-    '<span class="idx">#'+(i+1)+'</span>'+
+    '<span class="idx" style="width:55px;flex:0 0 55px;font-size:11px;color:var(--teal);font-weight:600;">'+tagLabel+'</span>'+
     side(m.p1, true)+
     '<span class="vs">vs</span>'+
     side(m.p2, false)+
