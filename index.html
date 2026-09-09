@@ -61,14 +61,39 @@
     border-radius:4px;border:1px solid var(--line);display:block;
   }
 
-  /* ---------- division tabs ---------- */
-  .div-tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
-  .div-tab{
-    border:1px solid var(--line);background:var(--panel);color:var(--muted);
-    padding:9px 18px;border-radius:3px;font-size:14px;font-weight:600;
-    font-family:'Oswald',sans-serif;letter-spacing:.02em;
+  /* ---------- division tabs (優化手機板並排) ---------- */
+  .div-tabs{
+    display:flex;
+    gap:8px;
+    margin-bottom:20px;
+    flex-wrap:nowrap; /* 強制不換行 */
+    width:100%;
   }
-  .div-tab .meta{display:block;font-family:'Inter',sans-serif;font-weight:500;font-size:11px;margin-top:2px;color:var(--muted);}
+  .div-tab{
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--muted);
+    padding:9px 12px;
+    border-radius:3px;
+    font-size:14px;
+    font-weight:600;
+    font-family:'Oswald',sans-serif;
+    letter-spacing:.02em;
+    flex:1 1 0; /* 平均分配寬度 */
+    min-width:0;
+    text-align:center;
+  }
+  .div-tab .meta{
+    display:block;
+    font-family:'Inter',sans-serif;
+    font-weight:500;
+    font-size:11px;
+    margin-top:2px;
+    color:var(--muted);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
   .div-tab.active{border-color:var(--teal);color:var(--teal);background:var(--teal-dim);}
   .div-tab.active .meta{color:var(--teal);}
   .div-tab .crown{color:var(--brass);margin-left:4px;}
@@ -136,7 +161,7 @@
   }
   .match.hl{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal);z-index:2;}
   
-  /* 改至「左上角」的對戰標籤 */
+  /* 左上角對戰標籤 */
   .match-tag{
     position:absolute;
     top:-9px;
@@ -253,7 +278,9 @@
   .footer-note{color:var(--muted);font-size:12px;margin-top:24px;line-height:1.7;border-top:1px solid var(--line);padding-top:14px;}
 
   @media (max-width:640px){
-    #app{padding:14px 12px 60px;}
+    #app{padding:12px 8px 60px;}
+    .div-tab{padding:7px 4px; font-size:13px;} /* 手機上適度縮小間距 */
+    .div-tab .meta{font-size:10px;}
     .m-side .pname{max-width:90px;}
   }
 </style>
@@ -1038,7 +1065,7 @@ async function onSetMatchTime(matchId){
   if(!loc) return;
   const oldTime = loc.m.timeStr || '';
   const newTime = prompt('請輸入比賽時間（例如：07/04 14:00，留空則移除時間）：', oldTime);
-  if(newTime === null) return; // 使用者按取消
+  if(newTime === null) return;
   setMatchTimeDiv(div, matchId, newTime);
   await saveState();
   render();
