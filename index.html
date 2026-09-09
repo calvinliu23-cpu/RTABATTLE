@@ -249,7 +249,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
-/* ---------- Firebase 初始化（用來取代 Claude 專屬的儲存功能） ---------- */
+/* ---------- Firebase 初始化 ---------- */
 const firebaseConfig = {
   apiKey: "AIzaSyD-y_QJH9CyOoVuZmHAwQrCO61XC4QnFKA",
   authDomain: "tournament-app-74296.firebaseapp.com",
@@ -264,7 +264,6 @@ const dbRef = firebase.database().ref('tournamentState');
 
 /* ============================================================
    三組別（大師區／巔峰區／菁英區）單淘汰賽 — 資料模型與邏輯
-   每個組別可獨立選擇起始規模：128強／64強／32強／16強
    ============================================================ */
 const DIVISIONS = [
   {id:'master', name:'大師區'},
@@ -272,17 +271,17 @@ const DIVISIONS = [
   {id:'elite',  name:'菁英區'}
 ];
 const SIZE_OPTIONS = [128,64,32,16];
-const CARD_W = 176;   // 對戰卡片寬度(px)
-const CARD_H = 62;    // 對戰卡片高度(px，需與 CSS 中 .prow 高度*2+邊框 相符)
-const COL_GAP = 48;   // 輪次欄位之間的水平間距(px)，用來畫連接線
-const ROW_GAP = 14;   // 第一輪卡片之間的垂直間距(px)
+const CARD_W = 176;
+const CARD_H = 62;
+const COL_GAP = 48;
+const ROW_GAP = 14;
 const UNIT = CARD_H + ROW_GAP;
 const TOP_PAD = 16;
 const BYE = 'BYE';
-const ADMIN_PASSWORD = 'admin123'; // 可自行修改此密碼
+const ADMIN_PASSWORD = 'admin123';
 const CN_NUM = ['一','二','三','四','五','六','七','八'];
 
-let allState = null;    // { divisions: { master: div|null, apex: div|null, elite: div|null } }
+let allState = null;
 let currentDiv = 'master';
 let pollTimer = null;
 
@@ -297,7 +296,6 @@ function shuffleArray(arr){
   }
   return a;
 }
-/* 標準賽程種子序：讓輪空／強弱籤盡量平均分散到整個對戰表，而不是全部集中在同一區塊 */
 function seedOrder(n){
   let seeds = [1];
   while(seeds.length < n){
@@ -318,7 +316,7 @@ function buildEvenList(realNames, size){
   return list;
 }
 function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function matchCountsForSize(size){
   const arr=[]; let n=size/2;
@@ -408,6 +406,7 @@ function buildDivision(names, size, format, shuffle, evenSpread){
 }
 
 function resolveAllDiv(div){
+  if(!div || !div.rounds) return;
   for(let r=0;r<div.totalRounds;r++){
     const round = div.rounds[r];
     for(const m of round){
@@ -426,12 +425,13 @@ function resolveAllDiv(div){
         if(right && right.done && m.p2==null) m.p2 = right.winner;
       }
     } else {
-      div.champion = (round[0].done && round[0].winner!==BYE) ? round[0].winner : null;
+      div.champion = (round[0] && round[0].done && round[0].winner!==BYE) ? round[0].winner : null;
     }
   }
 }
 
 function findLocDiv(div, matchId){
+  if(!div || !div.rounds) return null;
   for(let r=0;r<div.totalRounds;r++){
     const i = div.rounds[r].findIndex(m=>m.id===matchId);
     if(i>=0) return {r,i,m:div.rounds[r][i]};
@@ -450,7 +450,7 @@ function addPointDiv(div, matchId, side){
   resolveAllDiv(div);
 }
 function clearForwardDiv(div, r, i){
-  if(r+1>=div.totalRounds){ div.champion=null; return; }
+  if(!div || r+1>=div.totalRounds){ if(div) div.champion=null; return; }
   const nextIndex = Math.floor(i/2);
   const next = div.rounds[r+1][nextIndex];
   const isLeft = (i%2===0);
@@ -468,17 +468,31 @@ function resetMatchDiv(div, matchId){
   clearForwardDiv(div, loc.r, loc.i);
 }
 function setRoundFormatDiv(div, roundIndex, format){
+  if(!div || !div.rounds || !div.rounds[roundIndex]) return;
   format = Number(format);
   div.rounds[roundIndex].forEach(m=>{ if(!m.done) m.format = format; });
 }
 
-/* ---------- 儲存 / 讀取（透過 Firebase Realtime Database） ---------- */
-function emptyAllState(){ return {divisions:{master:null, apex:null, elite:null}, keyVisual:null, siteTitle:''}; }
+/* ---------- 儲存 / 讀取 ---------- */
+function emptyAllState(){ 
+  return { divisions: { master: null, apex: null, elite: null }, keyVisual: null, siteTitle: '' }; 
+}
+
+function sanitizeState(data){
+  if(!data || typeof data !== 'object') return emptyAllState();
+  if(!data.divisions) data.divisions = { master: null, apex: null, elite: null };
+  if(!data.siteTitle) data.siteTitle = '';
+  return data;
+}
+
 async function loadState(){
   try{
     const snap = await dbRef.once('value');
-    return snap.exists() ? snap.val() : null;
-  }catch(e){ console.error('讀取失敗', e); return null; }
+    return snap.exists() ? sanitizeState(snap.val()) : emptyAllState();
+  }catch(e){ 
+    console.error('讀取失敗', e); 
+    return emptyAllState(); 
+  }
 }
 async function saveState(){
   try{
@@ -505,10 +519,10 @@ function siteTitleOrDefault(){
 function divTabsHtml(onclickFn){
   let html = '<div class="div-tabs">';
   DIVISIONS.forEach(d=>{
-    const div = allState ? allState.divisions[d.id] : null;
+    const div = (allState && allState.divisions) ? allState.divisions[d.id] : null;
     const active = currentDiv===d.id;
     let meta = '尚未建立';
-    if(div){
+    if(div && div.rounds){
       const done = div.rounds.reduce((a,r)=>a+r.filter(m=>m.done).length,0);
       const total = div.rounds.reduce((a,r)=>a+r.length,0);
       meta = div.size+'強賽制・'+done+'/'+total+' 場';
@@ -522,24 +536,24 @@ function divTabsHtml(onclickFn){
   return html;
 }
 
-/* ---------------- 前台（公開頁面） ---------------- */
+/* ---------------- 前台 ---------------- */
 function switchDivPublic(id){ currentDiv=id; render(); }
 
 function renderPublic(app){
-  if(!allState){ allState = emptyAllState(); }
+  if(!allState) { allState = emptyAllState(); }
   let html = '';
   if(allState.keyVisual){
     html += '<div class="keyvisual-wrap"><img class="keyvisual" src="'+allState.keyVisual+'" alt="賽事主視覺"></div>';
   }
   html += '<div class="topbar">'+
-            '<div><h1>'+escapeHtml(siteTitleOrDefault())+'</h1><div class="sub">大師區・巔峰區・菁英區　賽程即時同步・僅供檢視</div></div>'+
+            '<div><h1>'+escapeHtml(siteTitleOrDefault())+'</h1><div class="sub">大師區・巔峰區・菁英區 賽程即時同步・僅供檢視</div></div>'+
             '<nav><a href="#admin">後台管理 →</a></nav>'+
           '</div>';
 
   html += divTabsHtml('switchDivPublic');
 
-  const div = allState.divisions[currentDiv];
-  if(!div){
+  const div = allState.divisions ? allState.divisions[currentDiv] : null;
+  if(!div || !div.rounds){
     html += '<div class="empty"><p>「'+divName(currentDiv)+'」尚未建立賽程。</p>'+
             '<p>請由後台建立：於網址列加上 <code>#admin</code> 進入管理介面。</p></div>';
     app.innerHTML = html;
@@ -622,8 +636,12 @@ function filterBracket(q){
   });
 }
 
-/* ---------------- 後台（管理介面） ---------------- */
-function isAdmin(){ return sessionStorage.getItem('bracket3div_admin')==='1'; }
+/* ---------------- 後台 ---------------- */
+let inMemoryAdminFlag = false;
+function isAdmin(){
+  try{ return sessionStorage.getItem('bracket3div_admin')==='1' || inMemoryAdminFlag; }
+  catch(e){ return inMemoryAdminFlag; }
+}
 function switchDivAdmin(id){ currentDiv=id; render(); }
 
 function renderAdmin(app){
@@ -631,7 +649,7 @@ function renderAdmin(app){
   if(!allState){ allState = emptyAllState(); }
 
   let html = '<div class="topbar">'+
-              '<div><h1>後台管理</h1><div class="sub">大師區・巔峰區・菁英區　賽程操作</div></div>'+
+              '<div><h1>後台管理</h1><div class="sub">大師區・巔峰區・菁英區 賽程操作</div></div>'+
               '<nav style="display:flex;gap:8px;">'+
                 '<a href="#">檢視前台 →</a>'+
                 '<a href="#" onclick="adminLogout();return false;">登出</a>'+
@@ -642,11 +660,11 @@ function renderAdmin(app){
   html += keyVisualPanelHtml();
   html += divTabsHtml('switchDivAdmin');
 
-  const div = allState.divisions[currentDiv];
+  const div = allState.divisions ? allState.divisions[currentDiv] : null;
   html += setupPanelHtml(currentDiv, div);
   html += seedEditorHtml(currentDiv, div);
 
-  if(div){
+  if(div && div.rounds){
     const labels = roundLabelsForSize(div.size);
     if(div.champion){
       html += '<div class="hero"><div class="champion"><span class="lead">'+divName(currentDiv)+'・賽事結束・冠軍</span>'+escapeHtml(div.champion)+'</div></div>';
@@ -673,7 +691,7 @@ function renderAdmin(app){
     }
   }
 
-  html += '<div class="footer-note">前台網址：本頁面移除網址列的 <code>#admin</code> 即為前台頁面，可分享給選手與觀眾檢視即時賽況（比分資料為共用儲存，任何持有連結者皆可檢視）。三個組別的賽程與比分彼此獨立，互不影響。</div>';
+  html += '<div class="footer-note">前台網址：本頁面移除網址列的 <code>#admin</code> 即為前台頁面。</div>';
 
   app.innerHTML = html;
 }
@@ -685,7 +703,7 @@ function renderAdminGate(app){
       '<input id="pwBox" type="password" placeholder="請輸入管理密碼" onkeydown="if(event.key===\'Enter\')adminLogin()">'+
       '<button class="btn primary" onclick="adminLogin()" style="width:100%">登入</button>'+
       '<div class="err" id="pwErr"></div>'+
-      '<div class="footer-note" style="text-align:left">預設密碼為 <code>admin123</code>，可於檔案原始碼中修改 ADMIN_PASSWORD 常數。</div>'+
+      '<div class="footer-note" style="text-align:left">預設密碼為 <code>admin123</code></div>'+
     '</div>';
 }
 
@@ -695,7 +713,7 @@ function siteTitlePanelHtml(){
       '<input type="text" id="siteTitleInput" value="'+escapeHtml(allState.siteTitle||'')+'" placeholder="例如：2026 夏季盃三組別單淘汰賽" style="flex:1 1 260px;background:var(--ink);border:1px solid var(--line);color:var(--text);padding:8px 10px;border-radius:3px;font-size:14px;">'+
       '<button class="btn primary small" onclick="onSaveTitle()">儲存標題</button>'+
     '</div>'+
-    '<div class="footer-note" style="margin-top:8px;padding-top:8px;">此標題會顯示在前台頁面最上方，以及瀏覽器分頁標題。留空則顯示預設標題「'+escapeHtml(siteTitleOrDefault())+'」。</div>'+
+    '<div class="footer-note" style="margin-top:8px;padding-top:8px;">此標題會顯示在前台頁面最上方，以及瀏覽器分頁標題。</div>'+
   '</div>';
 }
 
@@ -711,13 +729,12 @@ function keyVisualPanelHtml(){
   if(allState.keyVisual){
     html += '<img src="'+allState.keyVisual+'" alt="主視覺預覽" style="max-width:100%;max-height:160px;border-radius:3px;border:1px solid var(--line);display:block;margin-bottom:10px;">';
   } else {
-    html += '<p style="color:var(--muted);font-size:13px;margin:0 0 10px;">尚未上傳主視覺圖片，前台頁面目前不會顯示橫幅圖。</p>';
+    html += '<p style="color:var(--muted);font-size:13px;margin:0 0 10px;">尚未上傳主視覺圖片。</p>';
   }
   html += '<div class="row-inline">'+
             '<input type="file" accept="image/*" id="keyVisualInput" onchange="onKeyVisualChange(this)">'+
             (allState.keyVisual ? '<button class="btn danger small" onclick="removeKeyVisual()">移除圖片</button>' : '')+
           '</div>'+
-          '<div class="footer-note" style="margin-top:8px;padding-top:8px;">圖片會自動縮放、壓縮後以文字格式存入共用儲存空間，建議使用長寬比接近 16:9～3:1 的橫幅圖；檔案較大時會自動降低畫質以符合儲存限制。</div>'+
         '</div>';
   return html;
 }
@@ -740,13 +757,13 @@ function processImageFile(file){
           quality -= 0.1;
           dataUrl = canvas.toDataURL('image/jpeg', quality);
         }
-        if(dataUrl.length > 4.8*1024*1024){ reject(new Error('圖片經壓縮後仍過大，請換一張較小或較簡單的圖片再試一次。')); return; }
+        if(dataUrl.length > 4.8*1024*1024){ reject(new Error('圖片經壓縮後仍過大。')); return; }
         resolve(dataUrl);
       };
-      img.onerror = ()=>reject(new Error('圖片讀取失敗，請確認檔案是否為有效的圖片格式。'));
+      img.onerror = ()=>reject(new Error('圖片讀取失敗。'));
       img.src = reader.result;
     };
-    reader.onerror = ()=>reject(new Error('檔案讀取失敗，請再試一次。'));
+    reader.onerror = ()=>reject(new Error('檔案讀取失敗。'));
     reader.readAsDataURL(file);
   });
 }
@@ -762,7 +779,7 @@ async function onKeyVisualChange(inputEl){
     await saveState();
     render();
   }catch(e){
-    alert(e.message || '圖片處理失敗，請換一張圖片再試。');
+    alert(e.message || '圖片處理失敗。');
     inputEl.value='';
   }
 }
@@ -774,10 +791,12 @@ async function removeKeyVisual(){
 }
 
 function divIsUntouched(div){
+  if(!div || !div.rounds) return true;
   return div.rounds.every(round => round.every(m => m.score1===0 && m.score2===0));
 }
 
 function reseedDivision(div, names){
+  if(!div || !div.rounds) return;
   let list = names.slice(0, div.size);
   while(list.length < div.size) list.push(BYE);
   const round0 = div.rounds[0];
@@ -797,22 +816,23 @@ function seedEditorHtml(divId, div){
   if(!div) return '';
   const untouched = divIsUntouched(div);
   const currentOrder = [];
-  div.rounds[0].forEach(m=>{ currentOrder.push(m.p1||''); currentOrder.push(m.p2||''); });
+  if(div.rounds && div.rounds[0]){
+    div.rounds[0].forEach(m=>{ currentOrder.push(m.p1||''); currentOrder.push(m.p2||''); });
+  }
   let html = '<details class="round-block"><summary>'+
       '<span class="rname">調整第一輪對戰位置</span>'+
       '<span class="progress'+(untouched?'':' done')+'">'+(untouched?'可自由排列順位與輪空位置':'已有比分紀錄，無法調整')+'</span>'+
     '</summary><div class="round-body">';
   if(untouched){
-    html += '<div class="field"><label>依序列出第一輪每個位置的選手（每行一位，共 '+div.size+' 格；想安排輪空的位置直接輸入 BYE 或留空）</label>'+
+    html += '<div class="field"><label>依序列出第一輪每個位置的選手</label>'+
         '<textarea id="seedInput_'+divId+'">'+escapeHtml(currentOrder.join('\n'))+'</textarea>'+
       '</div>'+
       '<div class="row-inline">'+
         '<button class="btn primary" onclick="onApplySeed(\''+divId+'\')">套用新的位置排列</button>'+
         '<button class="btn small" onclick="onAutoSpreadSeed(\''+divId+'\')">自動平均分散輪空</button>'+
-        '<span style="color:var(--muted);font-size:12px;">相鄰兩行是同一場比賽（第1、2行對第1場，第3、4行對第2場，依此類推）</span>'+
       '</div>';
   } else {
-    html += '<p style="color:var(--muted);font-size:13px;margin:0;">此組別已經有比賽比分紀錄，若要重新安排位置，請先用上方「重新建立賽程」清除後再重新設定。</p>';
+    html += '<p style="color:var(--muted);font-size:13px;margin:0;">此組別已經有比賽比分紀錄，若要重新安排位置，請先重新建立。</p>';
   }
   html += '</div></details>';
   return html;
@@ -833,10 +853,7 @@ async function onApplySeed(divId){
   if(!div) return;
   const ta = document.getElementById('seedInput_'+divId);
   const lines = ta.value.split('\n').map(s=>s.trim());
-  if(lines.length > div.size){
-    if(!confirm('目前輸入了 '+lines.length+' 行，超過 '+div.size+' 格，多出的行將被捨棄，是否繼續？')) return;
-  }
-  if(!confirm('確定要套用這個新的位置排列嗎？此動作會重置「'+divName(divId)+'」目前所有比分與晉級結果。')) return;
+  if(!confirm('確定要套用新的位置排列嗎？')) return;
   const names = lines.map(s => s===''? BYE : s);
   reseedDivision(div, names);
   await saveState();
@@ -849,16 +866,16 @@ function setupPanelHtml(divId, div){
     return '<div class="panel">'+
       '<h2>建立「'+divName(divId)+'」賽程</h2>'+
       '<div class="row-inline" style="margin-bottom:12px;">'+
-        '<div class="field" style="margin-bottom:0;"><label>起始規模（人數不足 128 時，可從較小規模開始抽籤）</label>'+
+        '<div class="field" style="margin-bottom:0;"><label>起始規模</label>'+
           '<select id="sizeSelect">'+sizeOptionsHtml(128)+'</select>'+
         '</div>'+
         '<div class="field" style="margin-bottom:0;"><label>預設賽制</label>'+
           '<select id="defaultFormat">'+[3,4,5].map(f=>'<option value="'+f+'"'+(f===3?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+'</select>'+
         '</div>'+
-        '<label class="checkbox-line"><input type="checkbox" id="shuffleCheck" checked> 建立前隨機排籤</label>'+
-        '<label class="checkbox-line"><input type="checkbox" id="evenSpreadCheck" checked> 輪空平均分散（建議）</label>'+
+        '<label class="checkbox-line"><input type="checkbox" id="shuffleCheck" checked> 隨機排籤</label>'+
+        '<label class="checkbox-line"><input type="checkbox" id="evenSpreadCheck" checked> 輪空平均分散</label>'+
       '</div>'+
-      '<div class="field"><label>選手暱稱（每行一位；人數不足所選規模時，其餘將自動以「輪空」補滿並自動晉級）</label>'+
+      '<div class="field"><label>選手暱稱（每行一位）</label>'+
         '<textarea id="namesInput" placeholder="請貼上選手暱稱，每行一位…"></textarea>'+
       '</div>'+
       '<div class="row-inline">'+
@@ -876,8 +893,8 @@ function setupPanelHtml(divId, div){
         '<div class="field" style="margin-bottom:0;"><label>預設賽制</label>'+
           '<select id="defaultFormat">'+[3,4,5].map(f=>'<option value="'+f+'"'+(f===3?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+'</select>'+
         '</div>'+
-        '<label class="checkbox-line"><input type="checkbox" id="shuffleCheck" checked> 建立前隨機排籤</label>'+
-        '<label class="checkbox-line"><input type="checkbox" id="evenSpreadCheck" checked> 輪空平均分散（建議）</label>'+
+        '<label class="checkbox-line"><input type="checkbox" id="shuffleCheck" checked> 隨機排籤</label>'+
+        '<label class="checkbox-line"><input type="checkbox" id="evenSpreadCheck" checked> 輪空平均分散</label>'+
       '</div>'+
       '<div class="field"><label>選手暱稱（每行一位）</label>'+
         '<textarea id="namesInput" placeholder="請貼上選手暱稱，每行一位…"></textarea>'+
@@ -919,16 +936,11 @@ function matchRowAdmin(m, i){
 }
 
 /* ---------- 後台事件處理 ---------- */
-let inMemoryAdminFlag = false; // 部分瀏覽器環境（如內嵌分享頁面）會封鎖 sessionStorage，改用記憶體變數保底
-function isAdmin(){
-  try{ return sessionStorage.getItem('bracket3div_admin')==='1' || inMemoryAdminFlag; }
-  catch(e){ return inMemoryAdminFlag; }
-}
 function adminLogin(){
   const pw = document.getElementById('pwBox').value;
   if(pw===ADMIN_PASSWORD){
     inMemoryAdminFlag = true;
-    try{ sessionStorage.setItem('bracket3div_admin','1'); }catch(e){ /* 忽略，改用記憶體狀態 */ }
+    try{ sessionStorage.setItem('bracket3div_admin','1'); }catch(e){}
     render();
   } else {
     document.getElementById('pwErr').textContent = '密碼錯誤，請再試一次。';
@@ -936,7 +948,7 @@ function adminLogin(){
 }
 function adminLogout(){
   inMemoryAdminFlag = false;
-  try{ sessionStorage.removeItem('bracket3div_admin'); }catch(e){ /* 忽略 */ }
+  try{ sessionStorage.removeItem('bracket3div_admin'); }catch(e){}
   render();
 }
 
@@ -954,8 +966,7 @@ async function createTournamentUI(divId){
   const ta = document.getElementById('namesInput');
   const raw = ta.value.split('\n').map(s=>s.trim()).filter(Boolean);
   if(raw.length===0){ alert('請至少輸入一位選手暱稱。'); return; }
-  if(raw.length>size){ alert('已輸入超過 '+size+' 位，僅取前 '+size+' 位。'); }
-  if(allState.divisions[divId] && !confirm('確定要清除「'+divName(divId)+'」目前賽程並重新建立嗎？此動作無法復原。')) return;
+  if(allState.divisions[divId] && !confirm('確定要重新建立嗎？')) return;
   const format = Number(document.getElementById('defaultFormat').value);
   const shuffle = document.getElementById('shuffleCheck').checked;
   const evenSpread = document.getElementById('evenSpreadCheck').checked;
@@ -971,7 +982,7 @@ async function onAddPoint(matchId, side){
   render();
 }
 async function onResetMatch(matchId){
-  if(!confirm('確定要重設此場比賽的比分嗎？')) return;
+  if(!confirm('確定要重設比分嗎？')) return;
   const div = allState.divisions[currentDiv];
   resetMatchDiv(div, matchId);
   await saveState();
@@ -990,7 +1001,7 @@ async function onSetFormat(roundIndex, value){
 window.addEventListener('hashchange', async ()=>{
   if(getRoute()==='public'){
     const loaded = await loadState();
-    if(loaded) allState = loaded; // 讀取失敗時保留記憶體中現有的資料，避免畫面被清空
+    allState = loaded;
   }
   render();
 });
@@ -1005,7 +1016,7 @@ async function boot(){
     const val = searchBox ? searchBox.value : '';
     const cursor = searchBox ? searchBox.selectionStart : 0;
     const loaded = await loadState();
-    if(loaded) allState = loaded;
+    allState = loaded;
     render();
     const newBox = document.getElementById('searchBox');
     if(newBox && val){
