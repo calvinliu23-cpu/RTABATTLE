@@ -167,12 +167,21 @@
     border-bottom:1px solid var(--line);
   }
   .bracket-header .rh-cell{
-    flex:0 0 auto;padding:10px 4px;
+    flex:0 0 auto;padding:10px 6px;
     font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:.03em;
   }
-  .bracket-header .rh-cell .fmt{
+  .bracket-header .rh-cell .round-title{
+    display:inline-block;
+  }
+  .bracket-header .rh-cell .bo-tag{
+    color:var(--teal);
+    font-size:12px;
+    margin-left:4px;
+    font-weight:600;
+  }
+  .bracket-header .rh-cell .round-time{
     display:block;font-family:'Inter',sans-serif;font-size:11px;
-    font-weight:500;color:var(--muted);margin-top:2px;
+    font-weight:500;color:var(--brass);margin-top:3px;
   }
   .bracket-canvas{position:relative;}
   .bconn{position:absolute;background:var(--line-strong);pointer-events:none;}
@@ -363,7 +372,7 @@ let openRoundBlocks = {};
 
 /* ---------- 工具函式 ---------- */
 function threshold(format){ return Math.ceil((format+1)/2); }
-function formatLabel(f){ return 'BO'+f+'（先取'+threshold(f)+'勝）'; }
+function formatLabelShort(f){ return 'BO'+f; }
 function shuffleArray(arr){
   const a = arr.slice();
   for(let i=a.length-1;i>0;i--){
@@ -493,7 +502,8 @@ function buildDivision(names, size, format, shuffle, evenSpread){
     }
     rounds.push(arr);
   }
-  const div = {size, totalRounds, rounds, champion:null, createdAt:Date.now()};
+  const roundTimes = new Array(totalRounds).fill('');
+  const div = {size, totalRounds, rounds, roundTimes, champion:null, createdAt:Date.now()};
   resolveAllDiv(div);
   return div;
 }
@@ -569,6 +579,11 @@ function setMatchTimeDiv(div, matchId, timeStr){
   const loc = findLocDiv(div, matchId);
   if(!loc) return;
   loc.m.timeStr = timeStr.trim();
+}
+function setRoundTimeDiv(div, roundIndex, timeStr){
+  if(!div) return;
+  if(!div.roundTimes) div.roundTimes = new Array(div.totalRounds).fill('');
+  div.roundTimes[roundIndex] = timeStr.trim();
 }
 
 /* ---------- 儲存 / 讀取 ---------- */
@@ -702,8 +717,11 @@ function renderPublic(app){
 
   html += '<div class="bracket-header">';
   for(let r=0;r<div.totalRounds;r++){
+    const boText = formatLabelShort(div.rounds[r][0]?div.rounds[r][0].format:3);
+    const rTime = (div.roundTimes && div.roundTimes[r]) ? div.roundTimes[r] : '';
     html += '<div class="rh-cell" style="width:'+CARD_W+'px;margin-right:'+(r<div.totalRounds-1?COL_GAP:0)+'px;">'+
-              labels[r]+'<span class="fmt">'+formatLabel(div.rounds[r][0]?div.rounds[r][0].format:3)+'</span>'+
+              '<span class="round-title">'+labels[r]+'</span><span class="bo-tag">('+boText+')</span>'+
+              (rTime ? '<span class="round-time">📅 '+escapeHtml(rTime)+'</span>' : '')+
             '</div>';
   }
   html += '</div>';
@@ -961,13 +979,15 @@ function renderAdmin(app){
       }
 
       const openAttr = isOpen ? ' open' : '';
+      const rTime = (div.roundTimes && div.roundTimes[r]) ? div.roundTimes[r] : '';
       
       html += '<details class="round-block" data-round-key="'+blockKey+'"'+openAttr+'>';
       html += '<summary>'+
-                '<span class="rname">'+labels[r]+'</span>'+
+                '<span class="rname">'+labels[r]+ (rTime ? ' <small style="color:var(--brass);font-weight:normal;font-size:12px;">(📅 '+escapeHtml(rTime)+')</small>' : '') + '</span>'+
                 '<span class="row-inline">'+
+                  '<button class="btn small" onclick="event.stopPropagation();onSetRoundTime('+r+')">📅 輪次時間</button>'+
                   '<select class="small" onchange="onSetFormat('+r+',this.value)" onclick="event.stopPropagation()">'+
-                    [3,5].map(f=>'<option value="'+f+'"'+(round[0]&&round[0].format===f?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+
+                    [3,5].map(f=>'<option value="'+f+'"'+(round[0]&&round[0].format===f?' selected':'')+'>'+formatLabelShort(f)+'</option>').join('')+
                   '</select>'+
                   '<span class="progress'+(allDone?' done':'')+'">'+doneCount+' / '+round.length+' 完成</span>'+
                 '</span>'+
@@ -1157,7 +1177,7 @@ function setupPanelHtml(divId, div){
           '<select id="sizeSelect">'+sizeOptionsHtml(128)+'</select>'+
         '</div>'+
         '<div class="field" style="margin-bottom:0;"><label>預設賽制</label>'+
-          '<select id="defaultFormat">'+[3,5].map(f=>'<option value="'+f+'"'+(f===3?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+'</select>'+
+          '<select id="defaultFormat">'+[3,5].map(f=>'<option value="'+f+'"'+(f===3?' selected':'')+'>'+formatLabelShort(f)+'</option>').join('')+'</select>'+
         '</div>'+
         '<label class="checkbox-line"><input type="checkbox" id="shuffleCheck" checked> 隨機排籤</label>'+
         '<label class="checkbox-line"><input type="checkbox" id="evenSpreadCheck" checked> 輪空平均分散</label>'+
@@ -1178,7 +1198,7 @@ function setupPanelHtml(divId, div){
           '<select id="sizeSelect">'+sizeOptionsHtml(div.size)+'</select>'+
         '</div>'+
         '<div class="field" style="margin-bottom:0;"><label>預設賽制</label>'+
-          '<select id="defaultFormat">'+[3,5].map(f=>'<option value="'+f+'"'+(f===3?' selected':'')+'>'+formatLabel(f)+'</option>').join('')+'</select>'+
+          '<select id="defaultFormat">'+[3,5].map(f=>'<option value="'+f+'"'+(f===3?' selected':'')+'>'+formatLabelShort(f)+'</option>').join('')+'</select>'+
         '</div>'+
         '<label class="checkbox-line"><input type="checkbox" id="shuffleCheck" checked> 隨機排籤</label>'+
         '<label class="checkbox-line"><input type="checkbox" id="evenSpreadCheck" checked> 輪空平均分散</label>'+
@@ -1293,6 +1313,16 @@ async function onSetMatchTime(matchId){
   const newTime = prompt('請輸入比賽時間（例如：07/04 14:00，留空則移除時間）：', oldTime);
   if(newTime === null) return;
   setMatchTimeDiv(div, matchId, newTime);
+  await saveState();
+  render();
+}
+async function onSetRoundTime(roundIndex){
+  const div = allState.divisions[currentDiv];
+  if(!div) return;
+  const oldTime = (div.roundTimes && div.roundTimes[roundIndex]) ? div.roundTimes[roundIndex] : '';
+  const newTime = prompt('請輸入此輪次整體的預設時間（例如：10/21 14:00，留空則移除）：', oldTime);
+  if(newTime === null) return;
+  setRoundTimeDiv(div, roundIndex, newTime);
   await saveState();
   render();
 }
