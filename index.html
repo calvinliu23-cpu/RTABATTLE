@@ -737,7 +737,7 @@ function renderPublic(app){
   }
   html += '</div></div>';
 
-  html += '<div class="footer-note">此頁面每 5 秒自動同步後台最新結果。若比分未即時更新，可手動重新整理頁面。</div>';
+  html += '<div class="footer-note">此頁面每 30 秒自動同步後台最新結果。若比分未即時更新，可手動按 F5 重新整理頁面。</div>';
 
   app.innerHTML = html;
 
@@ -1344,10 +1344,9 @@ async function boot(){
   pollTimer = setInterval(async ()=>{
     if(getRoute()!=='public') return;
     
-    // 1. 記錄搜尋框焦點與值
+    // 1. 記錄搜尋框焦點與輸入游標位置
     const searchBox = document.getElementById('searchBox');
     const hadFocus = document.activeElement === searchBox;
-    const val = searchBox ? searchBox.value : '';
     const cursor = searchBox ? searchBox.selectionStart : 0;
 
     // 2. 記錄目前頁面與賽程表內部的滾動位置
@@ -1370,12 +1369,12 @@ async function boot(){
       newBracketScroll.scrollLeft = bScrollLeft;
     }
 
-    // 5. 還原搜尋狀態與輸入框
+    // 5. 還原搜尋輸入框焦點與游標
     const newBox = document.getElementById('searchBox');
     if(newBox){
       if(hadFocus){ newBox.focus(); newBox.setSelectionRange(cursor,cursor); }
     }
-  }, 5000);
+  }, 30000); // 改為 30 秒自動刷新
 }
 boot();
 </script>
