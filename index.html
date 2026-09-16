@@ -674,7 +674,6 @@ function renderServerBarHtml(){
   const route = parseHashRoute();
   return '<div class="server-bar">'+
            '<span>🎮 目前賽事房間 (Server ID)：<code>' + escapeHtml(route.serverId) + '</code></span>'+
-           '<span>切換賽事請在網址後加上：<code>#/' + escapeHtml(route.serverId) + '</code></span>'+
          '</div>';
 }
 
