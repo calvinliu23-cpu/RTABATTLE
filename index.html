@@ -362,7 +362,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 
 /* ============================================================
-   伺服器分流 (Server Router) 邏輯
+   伺服器分流 (Server Router) 邏輯與網址大小寫防呆
    ============================================================ */
 function parseHashRoute(){
   const hash = location.hash.replace('#/','').replace('#','');
@@ -374,7 +374,7 @@ function parseHashRoute(){
     serverId = 'default';
     mode = 'public';
   } else if(parts.length === 1){
-    if(parts[0] === 'admin'){
+    if(parts[0].toLowerCase() === 'admin'){
       serverId = 'default';
       mode = 'admin';
     } else {
@@ -383,7 +383,7 @@ function parseHashRoute(){
     }
   } else {
     serverId = parts[0];
-    mode = parts[1] === 'admin' ? 'admin' : 'public';
+    mode = parts[1].toLowerCase() === 'admin' ? 'admin' : 'public';
   }
   return { serverId, mode };
 }
