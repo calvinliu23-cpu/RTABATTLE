@@ -732,9 +732,7 @@ function renderPublic(app){
 
   const div = allState.divisions ? allState.divisions[currentDiv] : null;
   if(!div || !div.rounds){
-    const route = parseHashRoute();
-    html += '<div class="empty"><p>「'+divName(currentDiv)+'」尚未建立賽程。</p>'+
-            '<p>請由後台建立：於網址列加上 <code>#/' + route.serverId + '/admin</code> 進入管理介面。</p></div>';
+    html += '<div class="empty"><p>「'+divName(currentDiv)+'」尚未建立賽程。</p></div>';
     app.innerHTML = html;
     return;
   }
@@ -1067,7 +1065,6 @@ function renderAdminGate(app){
       '<input id="pwBox" type="password" placeholder="請輸入管理密碼" onkeydown="if(event.key===\'Enter\')adminLogin()">'+
       '<button class="btn primary" onclick="adminLogin()" style="width:100%">登入</button>'+
       '<div class="err" id="pwErr"></div>'+
-      '<div class="footer-note" style="text-align:left">預設密碼為 <code>admin123</code></div>'+
     '</div>';
 }
 
