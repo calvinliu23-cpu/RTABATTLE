@@ -336,7 +336,7 @@
   .scorebtn:hover:not(:disabled){background:var(--teal-dim);}
   .scoreval{font-weight:700;font-size:14px;width:16px;text-align:center;}
   .vs{color:var(--muted);font-size:11px;padding:0 2px;}
-  .status-badge{font-size:11px;color:var(--muted);flex:0 0 auto;min-width:56px;}
+  .status-badge{font-size:11px;color:var(--muted);flex:0 0 auto;min-width:64px;}
   .status-badge.done{color:var(--brass);}
   .m-actions{flex:0 0 auto;margin-left:auto;display:flex;gap:6px;}
 
@@ -560,7 +560,7 @@ function buildDivision(names, size, format, shuffle, evenSpread){
   return div;
 }
 
-/* ---------- 修正版：徹底解決勝者無法推進到下一輪的 Bug ---------- */
+/* ---------- 賽事判定推進（支援雙棄直接判定 BYE） ---------- */
 function resolveAllDiv(div){
   if(!div || !div.rounds) return;
   for(let r=0;r<div.totalRounds;r++){
@@ -578,10 +578,10 @@ function resolveAllDiv(div){
         const left = round[2*i], right = round[2*i+1];
         const m = next[i];
         if(left && left.done && left.winner){
-          m.p1 = (left.winner === BYE ? BYE : left.winner);
+          m.p1 = left.winner;
         }
         if(right && right.done && right.winner){
-          m.p2 = (right.winner === BYE ? BYE : right.winner);
+          m.p2 = right.winner;
         }
       }
     } else {
@@ -611,26 +611,37 @@ function addPointDiv(div, matchId, side){
   resolveAllDiv(div);
 }
 
-/* ---------- 新增：棄賽/棄權功能 ---------- */
+/* ---------- 棄賽邏輯（支援雙方棄賽） ---------- */
 function forfeitMatchDiv(div, matchId, forfeitSide){
   const loc = findLocDiv(div, matchId);
   if(!loc) return;
   const m = loc.m;
-  if(m.done || !m.p1 || !m.p2 || m.p1===BYE || m.p2===BYE) return;
-  
+  if(!m.p1 || !m.p2 || m.p1===BYE || m.p2===BYE) return;
+
   const th = threshold(m.format);
-  if(forfeitSide === 1){
-    m.winner = m.p2;
+
+  // 如果原本已經有一方棄賽，現在另一方也棄賽 -> 雙方棄賽
+  if(m.forfeit === 1 && forfeitSide === 2 || m.forfeit === 2 && forfeitSide === 1){
+    m.forfeit = 3; // 3 代表雙方皆棄賽
+    m.winner = BYE;
     m.score1 = 0;
-    m.score2 = th;
-    m.forfeit = 1;
-  } else {
-    m.winner = m.p1;
-    m.score1 = th;
     m.score2 = 0;
-    m.forfeit = 2;
+    m.done = true;
+  } else {
+    // 單方棄賽
+    if(forfeitSide === 1){
+      m.winner = m.p2;
+      m.score1 = 0;
+      m.score2 = th;
+      m.forfeit = 1;
+    } else {
+      m.winner = m.p1;
+      m.score1 = th;
+      m.score2 = 0;
+      m.forfeit = 2;
+    }
+    m.done = true;
   }
-  m.done = true;
   resolveAllDiv(div);
 }
 
@@ -853,12 +864,15 @@ function playerRowPublic(name, score, isDone, isWinner, isForfeit){
 }
 
 function matchCardPublic(m, x, y, size, r, i){
-  const showScore = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE;
+  const showScore = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE && m.forfeit !== 3;
   const tagLabel = getMatchTagLabel(size, r, i, m);
+  const p1Forfeit = (m.forfeit === 1 || m.forfeit === 3);
+  const p2Forfeit = (m.forfeit === 2 || m.forfeit === 3);
+
   let html = '<div class="match" id="match_'+m.id+'" style="left:'+x+'px;top:'+y+'px;width:'+CARD_W+'px;height:'+CARD_H+'px;" data-names="'+escapeHtml((m.p1||'')+' '+(m.p2||'')).toLowerCase()+'">';
   html += '<div class="match-tag">'+escapeHtml(tagLabel)+'</div>';
-  html += playerRowPublic(m.p1, showScore?m.score1:'', m.done, m.done && m.winner===m.p1, m.forfeit===1);
-  html += playerRowPublic(m.p2, showScore?m.score2:'', m.done, m.done && m.winner===m.p2, m.forfeit===2);
+  html += playerRowPublic(m.p1, showScore?m.score1:'', m.done, m.done && m.winner===m.p1 && m.winner!==BYE, p1Forfeit);
+  html += playerRowPublic(m.p2, showScore?m.score2:'', m.done, m.done && m.winner===m.p2 && m.winner!==BYE, p2Forfeit);
   html += '</div>';
   return html;
 }
@@ -1314,7 +1328,8 @@ function setupPanelHtml(divId, div){
 }
 
 function matchRowAdmin(m, i, size, r){
-  const ready = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE && !m.done;
+  const hasBoth = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE;
+  const ready = hasBoth && !m.done;
   const canReset = m.done || m.score1>0 || m.score2>0;
   const tagLabel = getMatchTagLabel(size, r, i, m);
   
@@ -1322,26 +1337,32 @@ function matchRowAdmin(m, i, size, r){
     let cls='m-side';
     if(!name) cls+=' empty';
     else if(name===BYE) cls+=' bye';
-    else if(m.done && m.winner===name) cls+=' win';
-    if(m.forfeit === (isP1?1:2)) cls+=' forfeit';
+    else if(m.done && m.winner===name && m.winner!==BYE) cls+=' win';
+    
+    const isThisForfeit = (m.forfeit === 3) || (m.forfeit === (isP1?1:2));
+    if(isThisForfeit) cls+=' forfeit';
 
     let label = name ? (name===BYE?'輪空':escapeHtml(name)) : '待定';
-    if(m.forfeit === (isP1?1:2)) label += ' (棄權)';
-    const disabled = !ready;
+    if(isThisForfeit) label += ' (棄權)';
     
+    // 棄賽按鈕條件：只要雙方都有人，且當前選手尚未被標記棄賽，且並非雙方皆已棄賽，就允許按棄賽
+    const canForfeitThis = hasBoth && m.forfeit !== 3 && (!m.done || (m.forfeit && m.forfeit !== (isP1?1:2)));
+
     return '<div class="'+cls+'">'+
       '<span class="pname" title="'+label+'">'+label+'</span>'+
       (name && name!==BYE ? 
         '<span class="scoreval">'+(isP1?m.score1:m.score2)+'</span>'+
-        '<button class="scorebtn" '+(disabled?'disabled':'')+' onclick="onAddPoint(\''+m.id+'\','+(isP1?1:2)+')">+1</button>'+
-        (ready ? '<button class="btn-forfeit" onclick="onForfeit(\''+m.id+'\','+(isP1?1:2)+')">棄賽</button>' : '')
+        '<button class="scorebtn" '+(ready?'':'disabled')+' onclick="onAddPoint(\''+m.id+'\','+(isP1?1:2)+')">+1</button>'+
+        (canForfeitThis ? '<button class="btn-forfeit" onclick="onForfeit(\''+m.id+'\','+(isP1?1:2)+')">棄賽</button>' : '')
         : '')+
       '</div>';
   }
 
   let statusTxt = '待定', statusCls = '';
   if(m.done){ 
-    statusTxt = m.forfeit ? '棄權完賽' : '已完成'; 
+    if(m.forfeit === 3) statusTxt = '雙方棄賽';
+    else if(m.forfeit) statusTxt = '棄權完賽';
+    else statusTxt = '已完成';
     statusCls = ' done'; 
   }
   else if(m.p1 && m.p2){ statusTxt='進行中'; }
@@ -1412,9 +1433,13 @@ async function onForfeit(matchId, side){
   if(!loc) return;
   const m = loc.m;
   const forfeitName = side === 1 ? m.p1 : m.p2;
-  const winnerName = side === 1 ? m.p2 : m.p1;
+  const otherName = side === 1 ? m.p2 : m.p1;
   
-  if(!confirm(`確定判定「${forfeitName}」棄賽？\n\n對手「${winnerName}」將直接晉級下一輪。`)) return;
+  if(m.forfeit && m.forfeit !== side){
+    if(!confirm(`對手「${otherName}」已先棄權，確定「${forfeitName}」也棄賽嗎？\n\n判定【雙方皆棄賽】，下一輪將變為「輪空 (BYE)」。`)) return;
+  } else {
+    if(!confirm(`確定判定「${forfeitName}」棄賽？\n\n對手「${otherName}」將直接晉級下一輪。`)) return;
+  }
   
   forfeitMatchDiv(div, matchId, side);
   await saveState();
@@ -1422,7 +1447,7 @@ async function onForfeit(matchId, side){
 }
 
 async function onResetMatch(matchId){
-  if(!confirm('確定要重設比分嗎？')) return;
+  if(!confirm('確定要重設比分與棄賽狀態嗎？')) return;
   const div = allState.divisions[currentDiv];
   resetMatchDiv(div, matchId);
   await saveState();
