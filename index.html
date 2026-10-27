@@ -242,6 +242,7 @@
   .prow .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .prow .score{font-weight:600;color:var(--muted);}
   .prow.bye .name, .prow.pending .name{color:var(--muted);font-style:italic;}
+  .prow.forfeit .name{color:var(--danger);text-decoration:line-through;opacity:0.8;}
   .prow.winner{background:var(--brass-dim);}
   .prow.winner .name{color:var(--brass);font-weight:600;}
   .prow.winner .score{color:var(--brass);}
@@ -289,6 +290,11 @@
   .btn:disabled{opacity:.35;cursor:not-allowed;}
   .btn:disabled:hover{border-color:var(--line-strong);color:var(--text);}
   .small{font-size:12px;padding:5px 9px;}
+  .btn-forfeit{
+    font-size:10px;padding:2px 6px;border-radius:3px;border:1px solid var(--danger);
+    background:transparent;color:var(--danger);line-height:1.2;margin-left:4px;
+  }
+  .btn-forfeit:hover{background:var(--danger);color:#fff;}
 
   details.round-block{
     border:1px solid var(--line);border-radius:4px;margin-bottom:10px;overflow:hidden;
@@ -317,10 +323,11 @@
     border-radius: 3px;
   }
   .m-row .idx{color:var(--muted);font-size:11px;width:26px;flex:0 0 26px;}
-  .m-side{display:flex;align-items:center;gap:6px;min-width:150px;flex:1 1 150px;}
-  .m-side .pname{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;}
+  .m-side{display:flex;align-items:center;gap:6px;min-width:180px;flex:1 1 180px;}
+  .m-side .pname{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;}
   .m-side.win .pname{color:var(--brass);font-weight:600;}
   .m-side.bye .pname, .m-side.empty .pname{color:var(--muted);font-style:italic;}
+  .m-side.forfeit .pname{color:var(--danger);text-decoration:line-through;}
   .scorebtn{
     width:26px;height:26px;border-radius:3px;border:1px solid var(--line-strong);
     background:var(--ink);color:var(--teal);font-size:14px;line-height:1;font-weight:700;
@@ -543,7 +550,7 @@ function buildDivision(names, size, format, shuffle, evenSpread){
     for(let i=0;i<count;i++){
       let p1=null, p2=null;
       if(r===0){ p1=list[i*2]; p2=list[i*2+1]; }
-      arr.push({id:'r'+r+'_'+i, p1, p2, score1:0, score2:0, winner:null, format, done:false, timeStr:''});
+      arr.push({id:'r'+r+'_'+i, p1, p2, score1:0, score2:0, winner:null, format, done:false, timeStr:'', forfeit:null});
     }
     rounds.push(arr);
   }
@@ -553,6 +560,7 @@ function buildDivision(names, size, format, shuffle, evenSpread){
   return div;
 }
 
+/* ---------- 修正版：徹底解決勝者無法推進到下一輪的 Bug ---------- */
 function resolveAllDiv(div){
   if(!div || !div.rounds) return;
   for(let r=0;r<div.totalRounds;r++){
@@ -569,8 +577,12 @@ function resolveAllDiv(div){
       for(let i=0;i<next.length;i++){
         const left = round[2*i], right = round[2*i+1];
         const m = next[i];
-        if(left && left.done && m.p1==null) m.p1 = left.winner;
-        if(right && right.done && m.p2==null) m.p2 = right.winner;
+        if(left && left.done && left.winner){
+          m.p1 = (left.winner === BYE ? BYE : left.winner);
+        }
+        if(right && right.done && right.winner){
+          m.p2 = (right.winner === BYE ? BYE : right.winner);
+        }
       }
     } else {
       div.champion = (round[0] && round[0].done && round[0].winner!==BYE) ? round[0].winner : null;
@@ -586,6 +598,7 @@ function findLocDiv(div, matchId){
   }
   return null;
 }
+
 function addPointDiv(div, matchId, side){
   const loc = findLocDiv(div, matchId);
   if(!loc) return;
@@ -597,6 +610,30 @@ function addPointDiv(div, matchId, side){
   else if(m.score2>=th){ m.winner=m.p2; m.done=true; }
   resolveAllDiv(div);
 }
+
+/* ---------- 新增：棄賽/棄權功能 ---------- */
+function forfeitMatchDiv(div, matchId, forfeitSide){
+  const loc = findLocDiv(div, matchId);
+  if(!loc) return;
+  const m = loc.m;
+  if(m.done || !m.p1 || !m.p2 || m.p1===BYE || m.p2===BYE) return;
+  
+  const th = threshold(m.format);
+  if(forfeitSide === 1){
+    m.winner = m.p2;
+    m.score1 = 0;
+    m.score2 = th;
+    m.forfeit = 1;
+  } else {
+    m.winner = m.p1;
+    m.score1 = th;
+    m.score2 = 0;
+    m.forfeit = 2;
+  }
+  m.done = true;
+  resolveAllDiv(div);
+}
+
 function clearForwardDiv(div, r, i){
   if(!div || r+1>=div.totalRounds){ if(div) div.champion=null; return; }
   const nextIndex = Math.floor(i/2);
@@ -604,27 +641,33 @@ function clearForwardDiv(div, r, i){
   const isLeft = (i%2===0);
   if(isLeft) next.p1=null; else next.p2=null;
   if(next.done || next.winner || next.score1>0 || next.score2>0){
-    next.score1=0; next.score2=0; next.winner=null; next.done=false;
+    next.score1=0; next.score2=0; next.winner=null; next.done=false; next.forfeit=null;
     clearForwardDiv(div, r+1, nextIndex);
   }
 }
+
 function resetMatchDiv(div, matchId){
   const loc = findLocDiv(div, matchId);
   if(!loc) return;
   const m = loc.m;
-  m.score1=0; m.score2=0; m.winner=null; m.done=false;
+  m.score1=0; m.score2=0; m.winner=null; m.done=false; m.forfeit=null;
   clearForwardDiv(div, loc.r, loc.i);
 }
+
 function setRoundFormatDiv(div, roundIndex, format){
   if(!div || !div.rounds || !div.rounds[roundIndex]) return;
   format = Number(format);
-  div.rounds[roundIndex].forEach(m=>{ if(!m.done) m.format = format; });
+  div.rounds[roundIndex].forEach(m=>{ 
+    m.format = format; 
+  });
 }
+
 function setMatchTimeDiv(div, matchId, timeStr){
   const loc = findLocDiv(div, matchId);
   if(!loc) return;
   loc.m.timeStr = timeStr.trim();
 }
+
 function setRoundTimeDiv(div, roundIndex, timeStr){
   if(!div) return;
   if(!div.roundTimes) div.roundTimes = new Array(div.totalRounds).fill('');
@@ -797,25 +840,29 @@ function renderPublic(app){
   }
 }
 
-function playerRowPublic(name, score, isDone, isWinner){
+function playerRowPublic(name, score, isDone, isWinner, isForfeit){
   let cls = 'prow';
   if(isWinner) cls += ' winner';
+  if(isForfeit) cls += ' forfeit';
   if(!name) cls += ' pending';
   else if(name===BYE) cls += ' bye';
-  const label = name ? (name===BYE?'輪空':escapeHtml(name)) : '待定';
+  let label = name ? (name===BYE?'輪空':escapeHtml(name)) : '待定';
+  if(isForfeit) label += ' (棄權)';
   const scoreTxt = (name && name!==BYE && isDone!==null) ? score : '';
   return '<div class="'+cls+'"><span class="name">'+label+'</span><span class="score">'+scoreTxt+'</span></div>';
 }
+
 function matchCardPublic(m, x, y, size, r, i){
   const showScore = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE;
   const tagLabel = getMatchTagLabel(size, r, i, m);
   let html = '<div class="match" id="match_'+m.id+'" style="left:'+x+'px;top:'+y+'px;width:'+CARD_W+'px;height:'+CARD_H+'px;" data-names="'+escapeHtml((m.p1||'')+' '+(m.p2||'')).toLowerCase()+'">';
   html += '<div class="match-tag">'+escapeHtml(tagLabel)+'</div>';
-  html += playerRowPublic(m.p1, showScore?m.score1:'', m.done, m.done && m.winner===m.p1);
-  html += playerRowPublic(m.p2, showScore?m.score2:'', m.done, m.done && m.winner===m.p2);
+  html += playerRowPublic(m.p1, showScore?m.score1:'', m.done, m.done && m.winner===m.p1, m.forfeit===1);
+  html += playerRowPublic(m.p2, showScore?m.score2:'', m.done, m.done && m.winner===m.p2, m.forfeit===2);
   html += '</div>';
   return html;
 }
+
 function filterBracket(q){
   q = q.trim().toLowerCase();
   document.querySelectorAll('.match').forEach(el=>{
@@ -1163,10 +1210,10 @@ function reseedDivision(div, names){
   for(let i=0;i<round0.length;i++){
     round0[i].p1 = list[i*2] || BYE;
     round0[i].p2 = list[i*2+1] || BYE;
-    round0[i].score1 = 0; round0[i].score2 = 0; round0[i].winner = null; round0[i].done = false;
+    round0[i].score1 = 0; round0[i].score2 = 0; round0[i].winner = null; round0[i].done = false; round0[i].forfeit = null;
   }
   for(let r=1;r<div.totalRounds;r++){
-    div.rounds[r].forEach(m=>{ m.p1=null; m.p2=null; m.score1=0; m.score2=0; m.winner=null; m.done=false; });
+    div.rounds[r].forEach(m=>{ m.p1=null; m.p2=null; m.score1=0; m.score2=0; m.winner=null; m.done=false; m.forfeit=null; });
   }
   div.champion = null;
   resolveAllDiv(div);
@@ -1270,22 +1317,35 @@ function matchRowAdmin(m, i, size, r){
   const ready = m.p1 && m.p2 && m.p1!==BYE && m.p2!==BYE && !m.done;
   const canReset = m.done || m.score1>0 || m.score2>0;
   const tagLabel = getMatchTagLabel(size, r, i, m);
+  
   function side(name, isP1){
     let cls='m-side';
     if(!name) cls+=' empty';
     else if(name===BYE) cls+=' bye';
     else if(m.done && m.winner===name) cls+=' win';
-    const label = name ? (name===BYE?'輪空':escapeHtml(name)) : '待定';
+    if(m.forfeit === (isP1?1:2)) cls+=' forfeit';
+
+    let label = name ? (name===BYE?'輪空':escapeHtml(name)) : '待定';
+    if(m.forfeit === (isP1?1:2)) label += ' (棄權)';
     const disabled = !ready;
+    
     return '<div class="'+cls+'">'+
       '<span class="pname" title="'+label+'">'+label+'</span>'+
-      (name && name!==BYE ? '<span class="scoreval">'+(isP1?m.score1:m.score2)+'</span>'+
-        '<button class="scorebtn" '+(disabled?'disabled':'')+' onclick="onAddPoint(\''+m.id+'\','+(isP1?1:2)+')">+1</button>' : '')+
+      (name && name!==BYE ? 
+        '<span class="scoreval">'+(isP1?m.score1:m.score2)+'</span>'+
+        '<button class="scorebtn" '+(disabled?'disabled':'')+' onclick="onAddPoint(\''+m.id+'\','+(isP1?1:2)+')">+1</button>'+
+        (ready ? '<button class="btn-forfeit" onclick="onForfeit(\''+m.id+'\','+(isP1?1:2)+')">棄賽</button>' : '')
+        : '')+
       '</div>';
   }
+
   let statusTxt = '待定', statusCls = '';
-  if(m.done){ statusTxt='已完成'; statusCls=' done'; }
+  if(m.done){ 
+    statusTxt = m.forfeit ? '棄權完賽' : '已完成'; 
+    statusCls = ' done'; 
+  }
   else if(m.p1 && m.p2){ statusTxt='進行中'; }
+
   return '<div class="m-row" id="admin_mrow_'+m.id+'">'+
     '<span class="idx" style="width:120px;flex:0 0 120px;font-size:11px;color:var(--teal);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(tagLabel)+'</span>'+
     side(m.p1, true)+
@@ -1345,6 +1405,22 @@ async function onAddPoint(matchId, side){
   await saveState();
   render();
 }
+
+async function onForfeit(matchId, side){
+  const div = allState.divisions[currentDiv];
+  const loc = findLocDiv(div, matchId);
+  if(!loc) return;
+  const m = loc.m;
+  const forfeitName = side === 1 ? m.p1 : m.p2;
+  const winnerName = side === 1 ? m.p2 : m.p1;
+  
+  if(!confirm(`確定判定「${forfeitName}」棄賽？\n\n對手「${winnerName}」將直接晉級下一輪。`)) return;
+  
+  forfeitMatchDiv(div, matchId, side);
+  await saveState();
+  render();
+}
+
 async function onResetMatch(matchId){
   if(!confirm('確定要重設比分嗎？')) return;
   const div = allState.divisions[currentDiv];
